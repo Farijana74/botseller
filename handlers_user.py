@@ -72,7 +72,8 @@ import leak_index
 from reseller_auto_provision import provision_auto_config, provision_test_config, provision_reseller_fixed_product, is_volume_credit_bot, ProvisionError
 from direct_panel_provision import provision_direct, planned_usernames, ProvisionError as DirectProvisionError
 from test_config_provision import provision_test_plan, format_plan_amount, ProvisionError as TestPlanProvisionError
-from i18n import set_language, reset_language, language_label, normalize_language, is_language_enabled, tr
+from notification_i18n import send_telegram
+from i18n import set_language, reset_language, language_label, normalize_language, is_language_enabled, tr, language_scope
 
 
 _CHANNEL_POST_TOKEN = re.compile(r"cp\d{1,9}")
@@ -952,6 +953,16 @@ def create_user_router(db, is_main_bot: bool = True, bot_manager=None) -> Router
         await message.answer(text, reply_markup=kb.product_confirm_kb(db, product_id, 1, stock, 10 if tier_info["title"] else 0))
 
     async def _handle_referral_invite_rewards(bot: Bot, referrer_id: int, reward_info: dict):
+        """پیام‌ها به دعوت‌کننده می‌رود؛ پس باید به زبان خودِ او رندر شوند، نه زبان
+        دعوت‌شونده‌ای که آپدیتش الان در حال پردازش است."""
+        if not reward_info:
+            return
+        lang = await asyncio.to_thread(db.get_user_language, referrer_id)
+        catalog = await asyncio.to_thread(db.translation_catalog, lang) if lang not in {"fa", "en"} else None
+        with language_scope(lang, catalog, track_missing=lang not in {"fa", "en"}):
+            await _handle_referral_invite_rewards_inner(bot, referrer_id, reward_info)
+
+    async def _handle_referral_invite_rewards_inner(bot: Bot, referrer_id: int, reward_info: dict):
         """پیام و تحویل جوایز حالت‌های ۲ و ۳ زیرمجموعه‌گیری (که با صرفِ دعوت، بدون
         نیاز به خرید زیرمجموعه، فعال می‌شوند) را برای دعوت‌کننده انجام می‌دهد."""
         if not reward_info:
@@ -1991,11 +2002,8 @@ def create_user_router(db, is_main_bot: bool = True, bot_manager=None) -> Router
                 if reward_info:
                     reward_amount, referrer_id = reward_info
                     try:
-                        await bot.send_message(
-                            referrer_id,
-                            tr(f"🤝 تبریک! یکی از زیرمجموعه‌های شما اولین خرید خود را انجام داد.\n"
-                            f"💰 {reward_amount:,} تومان به کیف پول شما اضافه شد."),
-                        )
+                        await send_telegram(bot, db, referrer_id, f"🤝 تبریک! یکی از زیرمجموعه‌های شما اولین خرید خود را انجام داد.\n"
+                            f"💰 {reward_amount:,} تومان به کیف پول شما اضافه شد.")
                     except Exception:
                         pass
 
@@ -4774,11 +4782,8 @@ def create_user_router(db, is_main_bot: bool = True, bot_manager=None) -> Router
         ))
         await call.answer(db.get_text('handlers_user.auto_70c5a109', '✅ کانفیگ منتقل شد.'), show_alert=True)
         try:
-            await call.bot.send_message(
-                target_id,
-                tr(f"📦 یک کانفیگ («{cc['display_name'] or cc['username']}») از طرف کاربر دیگری به حساب شما منتقل شد.\n"
-                "برای مشاهده، حساب کاربری ← سرویس‌ها و سفارش‌های من را ببینید."),
-            )
+            await send_telegram(call.bot, db, target_id, f"📦 یک کانفیگ («{cc['display_name'] or cc['username']}») از طرف کاربر دیگری به حساب شما منتقل شد.\n"
+                "برای مشاهده، حساب کاربری ← سرویس‌ها و سفارش‌های من را ببینید.")
         except Exception:
             pass
         try:
@@ -4862,11 +4867,8 @@ def create_user_router(db, is_main_bot: bool = True, bot_manager=None) -> Router
                 if renewal_reward_info:
                     renewal_reward_amount, renewal_referrer_id = renewal_reward_info
                     try:
-                        await bot.send_message(
-                            renewal_referrer_id,
-                            tr(f"🤝 تبریک! یکی از زیرمجموعه‌های شما سرویسش را تمدید کرد.\n"
-                            f"💰 {renewal_reward_amount:,} تومان پورسانت به کیف پول شما اضافه شد."),
-                        )
+                        await send_telegram(bot, db, renewal_referrer_id, f"🤝 تبریک! یکی از زیرمجموعه‌های شما سرویسش را تمدید کرد.\n"
+                            f"💰 {renewal_reward_amount:,} تومان پورسانت به کیف پول شما اضافه شد.")
                     except Exception:
                         pass
                 await edit_fn(result_text)
@@ -5969,7 +5971,7 @@ def create_user_router(db, is_main_bot: bool = True, bot_manager=None) -> Router
         await message.answer(tr(f"✅ {amount:,} تومان منتقل شد.\nموجودی فعلی: {balance:,} تومان"), reply_markup=kb.wallet_menu_kb(db))
         await _notify_admins_wallet_transfer(message.bot, message.from_user.id, receiver, amount)
         try:
-            await message.bot.send_message(receiver, tr(f"💸 {amount:,} تومان از طرف یک کاربر به کیف پول شما منتقل شد."))
+            await send_telegram(message.bot, db, receiver, f"💸 {amount:,} تومان از طرف یک کاربر به کیف پول شما منتقل شد.")
         except Exception:
             pass
 
@@ -7275,14 +7277,11 @@ def create_user_router(db, is_main_bot: bool = True, bot_manager=None) -> Router
         await state.clear()
         sent_ok = False
         try:
-            await message.bot.send_message(
-                owner_id,
-                tr(f"🏪 کاربری با آیدی عددی {message.from_user.id} درخواست کرده که شما مالکِ یک بات "
+            await send_telegram(message.bot, db, owner_id, f"🏪 کاربری با آیدی عددی {message.from_user.id} درخواست کرده که شما مالکِ یک بات "
                 f"نمایندگی (@{req['bot_username']}) با {req['volume_gb']:,} گیگ اعتبار حجمی اولیه باشید.\n\n"
                 "با تایید، این بات و کلِ اعتبار/موجودیِ آن از این پس متعلق به آیدی شما (همین چت) "
-                "خواهد بود. آیا تایید می‌کنید؟"),
-                reply_markup=kb.reseller_owner_external_confirm_kb(request_id),
-            )
+                "خواهد بود. آیا تایید می‌کنید؟",
+                reply_markup=kb.reseller_owner_external_confirm_kb(request_id))
             sent_ok = True
         except Exception:
             sent_ok = False
@@ -7373,11 +7372,8 @@ def create_user_router(db, is_main_bot: bool = True, bot_manager=None) -> Router
             except Exception:
                 pass
             try:
-                await bot.send_message(
-                    requester_id,
-                    tr("⛔️ این توکن همین الان توسط یک ثبت‌نام دیگر مصرف شد؛ لطفاً یک توکن جدید از @BotFather "
-                    "بگیرید و دوباره ارسال کنید."),
-                )
+                await send_telegram(bot, db, requester_id, "⛔️ این توکن همین الان توسط یک ثبت‌نام دیگر مصرف شد؛ لطفاً یک توکن جدید از @BotFather "
+                    "بگیرید و دوباره ارسال کنید.")
             except Exception:
                 pass
             return
@@ -7465,32 +7461,23 @@ def create_user_router(db, is_main_bot: bool = True, bot_manager=None) -> Router
                     "ابتدا ADMIN_PANEL_URL / آدرس پنل وب را تنظیم کنید تا لینک راه‌اندازی ارسال شود."
                 )
         try:
-            await bot.send_message(
-                owner_id,
-                tr(f"{status_text}\n\n"
+            await send_telegram(bot, db, owner_id, f"{status_text}\n\n"
                 f"🤖 بات: @{username}\n"
                 f"📦 اعتبار حجمی تخصیص‌یافته: {req['volume_gb']:,} گیگ\n\n"
                 f"برای شروع، با /start به بات خودتان (@{username}) وارد شوید."
-                f"{web_panel_note}"),
-                reply_markup=kb.menu_for_user(db, owner_id, is_main_bot),
-            )
+                f"{web_panel_note}",
+                reply_markup=kb.menu_for_user(db, owner_id, is_main_bot))
         except Exception:
             pass
         if requester_id != owner_id:
             try:
-                await bot.send_message(
-                    requester_id,
-                    tr(f"✅ آیدی {owner_id} مالکیت نمایندگی #{req['id']} شما را تایید کرد و راه‌اندازی تکمیل شد.\n"
-                    f"🤖 بات: @{username}"),
-                )
+                await send_telegram(bot, db, requester_id, f"✅ آیدی {owner_id} مالکیت نمایندگی #{req['id']} شما را تایید کرد و راه‌اندازی تکمیل شد.\n"
+                    f"🤖 بات: @{username}")
             except Exception:
                 pass
         try:
             for admin_id in _senior_admin_ids():
-                await bot.send_message(
-                    admin_id,
-                    tr(f"✅ نمایندگی #{req['id']} تکمیل شد.\n🤖 بات: @{username}\n👤 مالک: {owner_id}"),
-                )
+                await send_telegram(bot, db, admin_id, f"✅ نمایندگی #{req['id']} تکمیل شد.\n🤖 بات: @{username}\n👤 مالک: {owner_id}")
         except Exception:
             pass
 
@@ -7550,11 +7537,8 @@ def create_user_router(db, is_main_bot: bool = True, bot_manager=None) -> Router
                 key=StorageKey(bot_id=bot.id, chat_id=req["user_id"], user_id=req["user_id"]),
             )
             await user_state.set_state(ResellerRequestFlow.waiting_owner_id)
-            await bot.send_message(
-                req["user_id"],
-                tr(f"❌ آیدی {rejected_owner_id} مالکیت نمایندگی #{request_id} شما را نپذیرفت.\n\n"
-                "لطفاً یک آیدی عددی دیگر (یا آیدی عددی خودتان) را ارسال کنید:"),
-            )
+            await send_telegram(bot, db, req["user_id"], f"❌ آیدی {rejected_owner_id} مالکیت نمایندگی #{request_id} شما را نپذیرفت.\n\n"
+                "لطفاً یک آیدی عددی دیگر (یا آیدی عددی خودتان) را ارسال کنید:")
         except Exception:
             pass
 
@@ -7913,11 +7897,8 @@ def create_user_router(db, is_main_bot: bool = True, bot_manager=None) -> Router
             if reward_info:
                 reward_amount, referrer_id = reward_info
                 try:
-                    await bot.send_message(
-                        referrer_id,
-                        tr(f"🤝 تبریک! یکی از زیرمجموعه‌های شما اولین خرید خود را انجام داد.\n"
-                        f"💰 {reward_amount:,} تومان به کیف پول شما اضافه شد."),
-                    )
+                    await send_telegram(bot, db, referrer_id, f"🤝 تبریک! یکی از زیرمجموعه‌های شما اولین خرید خود را انجام داد.\n"
+                        f"💰 {reward_amount:,} تومان به کیف پول شما اضافه شد.")
                 except Exception:
                     pass
             try:

@@ -1156,7 +1156,7 @@ def create_admin_router(db, is_main_bot: bool = True, bot_manager=None) -> Route
         failed = 0
         for uid in user_ids:
             try:
-                await bot.send_message(uid, notification)
+                await call.bot.send_message(uid, notification)
                 sent += 1
             except Exception:
                 failed += 1
@@ -3349,11 +3349,8 @@ def create_admin_router(db, is_main_bot: bool = True, bot_manager=None) -> Route
             if renewal_reward_info:
                 renewal_reward_amount, renewal_referrer_id = renewal_reward_info
                 try:
-                    await bot.send_message(
-                        renewal_referrer_id,
-                        tr(f"🤝 تبریک! یکی از زیرمجموعه‌های شما سرویسش را تمدید کرد.\n"
-                        f"💰 {renewal_reward_amount:,} تومان پورسانت به کیف پول شما اضافه شد."),
-                    )
+                    await send_telegram(bot, db, renewal_referrer_id, f"🤝 تبریک! یکی از زیرمجموعه‌های شما سرویسش را تمدید کرد.\n"
+                        f"💰 {renewal_reward_amount:,} تومان پورسانت به کیف پول شما اضافه شد.")
                 except Exception:
                     pass
             try:
@@ -3419,7 +3416,7 @@ def create_admin_router(db, is_main_bot: bool = True, bot_manager=None) -> Route
                 f"{order['custom_volume_gb']} گیگ | مبلغ: {order['final_price']:,}",
             ))
             try:
-                await bot.send_message(order["user_id"], tr("✅ کانفیگ شخصی شما ساخته شد!"))
+                await send_telegram(bot, db, order["user_id"], "✅ کانفیگ شخصی شما ساخته شد!")
                 await deliver_config_to_user(
                     bot, order["user_id"], "کانفیگ شخصی",
                     [result.subscription_url], final_price=order["final_price"], order_id=order_id, db=db,
@@ -3458,7 +3455,7 @@ def create_admin_router(db, is_main_bot: bool = True, bot_manager=None) -> Route
                 f"مبلغ: {(order['final_price'] or product['price']):,}",
             ))
             try:
-                await bot.send_message(order["user_id"], tr(f"✅ خرید شما تایید شد!\n📦 محصول: {product['name']}"))
+                await send_telegram(bot, db, order["user_id"], f"✅ خرید شما تایید شد!\n📦 محصول: {product['name']}")
                 await deliver_config_to_user(
                     bot, order["user_id"], product["name"],
                     [r["subscription_url"] for r in prov_results], final_price=order["final_price"], order_id=order_id, db=db,
@@ -3495,16 +3492,13 @@ def create_admin_router(db, is_main_bot: bool = True, bot_manager=None) -> Route
         if reward_info:
             reward_amount, referrer_id = reward_info
             try:
-                await bot.send_message(
-                    referrer_id,
-                    tr(f"🤝 تبریک! یکی از زیرمجموعه‌های شما اولین خرید خود را انجام داد.\n"
-                    f"💰 {reward_amount:,} تومان به کیف پول شما اضافه شد."),
-                )
+                await send_telegram(bot, db, referrer_id, f"🤝 تبریک! یکی از زیرمجموعه‌های شما اولین خرید خود را انجام داد.\n"
+                    f"💰 {reward_amount:,} تومان به کیف پول شما اضافه شد.")
             except Exception:
                 pass
 
         try:
-            await bot.send_message(order["user_id"], tr(f"✅ خرید شما تایید شد!\n📦 محصول: {product['name']}"))
+            await send_telegram(bot, db, order["user_id"], f"✅ خرید شما تایید شد!\n📦 محصول: {product['name']}")
             await deliver_config_to_user(
                 bot,
                 order["user_id"],
@@ -3562,12 +3556,9 @@ def create_admin_router(db, is_main_bot: bool = True, bot_manager=None) -> Route
             f"مدیر {call.from_user.id}"))
 
         try:
-            await bot.send_message(
-                order["user_id"],
-                tr("🚫 فیش فیک تشخیص داده شد.\n\n"
+            await send_telegram(bot, db, order["user_id"], "🚫 فیش فیک تشخیص داده شد.\n\n"
                 "⛔️ سفارش شما رد شد و حساب کاربری‌تان بلاک شد.\n"
-                "در صورت اشتباه، برای بررسی موضوع با پشتیبانی تماس بگیرید."),
-            )
+                "در صورت اشتباه، برای بررسی موضوع با پشتیبانی تماس بگیرید.")
         except Exception:
             pass
 
@@ -3606,10 +3597,7 @@ def create_admin_router(db, is_main_bot: bool = True, bot_manager=None) -> Route
             f"سفارش #{order_id} | کاربر {order['user_id']}",
         ))
         try:
-            await bot.send_message(
-                order["user_id"],
-                tr("❌ متاسفانه رسید ارسالی شما تایید نشد. در صورت اشتباه لطفاً با پشتیبانی در ارتباط باشید."),
-            )
+            await send_telegram(bot, db, order["user_id"], "❌ متاسفانه رسید ارسالی شما تایید نشد. در صورت اشتباه لطفاً با پشتیبانی در ارتباط باشید.")
             await _notify_user_inline_menu(bot, order["user_id"])
         except Exception:
             pass
@@ -4693,11 +4681,8 @@ def create_admin_router(db, is_main_bot: bool = True, bot_manager=None) -> Route
         try:
             cashback_amount = await asyncio.to_thread(db.get_topup_cashback, topup_id)
             cashback_line = f"🎁 کش‌بک شارژ: {cashback_amount:,} تومان\n" if cashback_amount else ""
-            await bot.send_message(
-                topup["user_id"],
-                tr(f"✅ شارژ کیف پول شما تایید شد!\n💰 مبلغ {topup['amount']:,} تومان اضافه شد.\n"
-                f"{cashback_line}👛 موجودی فعلی کیف پول شما: {new_balance:,} تومان"),
-            )
+            await send_telegram(bot, db, topup["user_id"], f"✅ شارژ کیف پول شما تایید شد!\n💰 مبلغ {topup['amount']:,} تومان اضافه شد.\n"
+                f"{cashback_line}👛 موجودی فعلی کیف پول شما: {new_balance:,} تومان")
             await _notify_user_inline_menu(bot, topup["user_id"])
         except Exception:
             pass
@@ -4737,10 +4722,7 @@ def create_admin_router(db, is_main_bot: bool = True, bot_manager=None) -> Route
             f"شارژ #{topup_id} | کاربر {topup['user_id']} | مبلغ: {topup['amount']:,}",
         ))
         try:
-            await bot.send_message(
-                topup["user_id"],
-                tr("❌ متاسفانه درخواست شارژ کیف پول شما تایید نشد. در صورت اشتباه با پشتیبانی تماس بگیرید."),
-            )
+            await send_telegram(bot, db, topup["user_id"], "❌ متاسفانه درخواست شارژ کیف پول شما تایید نشد. در صورت اشتباه با پشتیبانی تماس بگیرید.")
             await _notify_user_inline_menu(bot, topup["user_id"])
         except Exception:
             pass
@@ -9406,14 +9388,11 @@ def create_admin_router(db, is_main_bot: bool = True, bot_manager=None) -> Route
             if approved_percent is not None and proposed_percent is not None and int(proposed_percent) != int(approved_percent):
                 percent_line += f"💡 پیشنهاد شما: {proposed_percent}٪ (مدیر عدد بالا را تایید کرد)\n"
             try:
-                await bot.send_message(
-                    req["user_id"],
-                    tr(f"🏪 درخواست نمایندگی #{request_id} شما تایید شد!\n\n"
+                await send_telegram(bot, db, req["user_id"], f"🏪 درخواست نمایندگی #{request_id} شما تایید شد!\n\n"
                     f"💰 هزینه‌ی نمایندگی: {price:,} تومان\n"
                     f"{percent_line}{volume_line}\n"
-                    f"در صورت موافقت روی «پرداخت می‌کنم» بزنید:"),
-                    reply_markup=kb.reseller_request_pay_kb(request_id),
-                )
+                    f"در صورت موافقت روی «پرداخت می‌کنم» بزنید:",
+                    reply_markup=kb.reseller_request_pay_kb(request_id))
             except Exception:
                 pass
 
@@ -9521,10 +9500,7 @@ def create_admin_router(db, is_main_bot: bool = True, bot_manager=None) -> Route
             await message.answer(db.get_text('handlers_admin.auto_3a17bf6f', '✅ ثبت شد و به کاربر اطلاع داده شد.'))
             label = "درخواست نمایندگی" if status == "rejected" else "پرداخت درخواست نمایندگی"
             try:
-                await bot.send_message(
-                    req["user_id"],
-                    tr(f"❌ متاسفانه {label} شما (#{request_id}) رد شد.\n\nدلیل: {reason}"),
-                )
+                await send_telegram(bot, db, req["user_id"], f"❌ متاسفانه {label} شما (#{request_id}) رد شد.\n\nدلیل: {reason}")
                 await _notify_user_inline_menu(bot, req["user_id"])
             except Exception:
                 pass
@@ -9557,7 +9533,7 @@ def create_admin_router(db, is_main_bot: bool = True, bot_manager=None) -> Route
                 tier = await asyncio.to_thread(db.get_reseller_tier, req["tier_code"]) if req["tier_code"] else None
                 label = f"{tier['icon']} {tier['title']}" if tier else "نمایندگی"
                 try:
-                    await bot.send_message(req["user_id"], tr(f"✅ پرداخت هزینه {label} تایید شد و نمایندگی شما فعال شد."))
+                    await send_telegram(bot, db, req["user_id"], f"✅ پرداخت هزینه {label} تایید شد و نمایندگی شما فعال شد.")
                 except Exception:
                     pass
                 try:
@@ -9591,12 +9567,9 @@ def create_admin_router(db, is_main_bot: bool = True, bot_manager=None) -> Route
                         "بودید، آن جریان لغو شد؛ بعداً می‌توانید دوباره از منو شروعش کنید."
                     )
                 try:
-                    await bot.send_message(
-                        req["user_id"],
-                        "✅ پرداخت شما تایید شد!\n\n"
+                    await send_telegram(bot, db, req["user_id"], "✅ پرداخت شما تایید شد!\n\n"
                         "حالا توکن بات نماینده‌ی خودتان را ارسال کنید (همانی که از @BotFather گرفته‌اید):"
-                        + interrupted_note,
-                    )
+                        + interrupted_note)
                 except Exception:
                     pass
             else:
@@ -9717,19 +9690,13 @@ def create_admin_router(db, is_main_bot: bool = True, bot_manager=None) -> Route
                 except Exception:
                     logger.exception("ساخت لینک پنل وب برای نماینده no-bot #%s ناموفق بود", reseller_bot_id)
             try:
-                await bot.send_message(
-                    owner_id,
-                    tr(f"✅ نمایندگی شما تکمیل شد.\n🧩 رابط: {interface_label}{note}{web_panel_note}"),
-                )
+                await send_telegram(bot, db, owner_id, f"✅ نمایندگی شما تکمیل شد.\n🧩 رابط: {interface_label}{note}{web_panel_note}")
             except Exception:
                 pass
             try:
                 for a in (await asyncio.to_thread(db.list_admins_with_roles)):
                     if a["role"] in ("owner", "admin"):
-                        await bot.send_message(
-                            a["telegram_id"],
-                            tr(f"✅ نمایندگی #{req['id']} (بدون بات مستقل) تکمیل شد.\n👤 مالک: {owner_id}"),
-                        )
+                        await send_telegram(bot, db, a["telegram_id"], f"✅ نمایندگی #{req['id']} (بدون بات مستقل) تکمیل شد.\n👤 مالک: {owner_id}")
             except Exception:
                 pass
 
@@ -9785,10 +9752,7 @@ def create_admin_router(db, is_main_bot: bool = True, bot_manager=None) -> Route
                 f"درخواست #{request_id} | کاربر {req['user_id']}",
             ))
             try:
-                await bot.send_message(
-                    req["user_id"],
-                    tr(f"⚪️ درخواست نمایندگی شما (#{request_id}) توسط مدیریت کنسل شد."),
-                )
+                await send_telegram(bot, db, req["user_id"], f"⚪️ درخواست نمایندگی شما (#{request_id}) توسط مدیریت کنسل شد.")
                 await _notify_user_inline_menu(bot, req["user_id"])
             except Exception:
                 pass
@@ -10116,14 +10080,11 @@ def create_admin_router(db, is_main_bot: bool = True, bot_manager=None) -> Route
             me = await bot.get_me()
             link = f"https://t.me/{me.username}?start=resref_{req['user_id']}"
             try:
-                await bot.send_message(
-                    req["user_id"],
-                    tr("✅ درخواست نمایندگی کمیسیونی شما تایید شد!\n\n"
+                await send_telegram(bot, db, req["user_id"], "✅ درخواست نمایندگی کمیسیونی شما تایید شد!\n\n"
                     f"🔗 لینک اختصاصی فروش شما:\n{link}\n\n"
                     f"روی هر خرید مشتریانی که با این لینک وارد شوند، {req['proposed_percent']}٪ کارمزد به کیف "
                     "پول شما اضافه می‌شود - تا وقتی ادمین نمایندگی‌تان را غیرفعال کند.\n"
-                    "برای دیدن لینک و آمار، دستور /reseller_link را بفرستید."),
-                )
+                    "برای دیدن لینک و آمار، دستور /reseller_link را بفرستید.")
                 await _notify_user_inline_menu(bot, req["user_id"])
             except Exception:
                 pass
@@ -10169,10 +10130,7 @@ def create_admin_router(db, is_main_bot: bool = True, bot_manager=None) -> Route
             ))
             await message.answer(db.get_text('handlers_admin.auto_3a17bf6f', '✅ ثبت شد و به کاربر اطلاع داده شد.'))
             try:
-                await bot.send_message(
-                    req["user_id"],
-                    tr(f"❌ متاسفانه درخواست نمایندگی کمیسیونی شما (#{request_id}) رد شد.\n\nدلیل: {reason}"),
-                )
+                await send_telegram(bot, db, req["user_id"], f"❌ متاسفانه درخواست نمایندگی کمیسیونی شما (#{request_id}) رد شد.\n\nدلیل: {reason}")
                 await _notify_user_inline_menu(bot, req["user_id"])
             except Exception:
                 pass
@@ -10220,7 +10178,7 @@ def create_admin_router(db, is_main_bot: bool = True, bot_manager=None) -> Route
             (await asyncio.to_thread(db.disable_inline_reseller, target_id))
             (await asyncio.to_thread(db.log_admin_action, call.from_user.id, "commission_reseller_disable", f"کاربر {target_id}"))
             try:
-                await bot.send_message(target_id, tr("⛔️ نمایندگی کمیسیونی شما توسط ادمین غیرفعال شد."))
+                await send_telegram(bot, db, target_id, "⛔️ نمایندگی کمیسیونی شما توسط ادمین غیرفعال شد.")
             except Exception:
                 pass
             resellers = (await asyncio.to_thread(db.list_inline_resellers))
@@ -10258,7 +10216,7 @@ def create_admin_router(db, is_main_bot: bool = True, bot_manager=None) -> Route
                 message.from_user.id, "commission_reseller_edit_percent", f"کاربر {target_id} → {percent}٪",
             ))
             try:
-                await bot.send_message(target_id, tr(f"📊 درصد کمیسیون نمایندگی شما به {percent}٪ تغییر کرد."))
+                await send_telegram(bot, db, target_id, f"📊 درصد کمیسیون نمایندگی شما به {percent}٪ تغییر کرد.")
             except Exception:
                 pass
             await message.answer(
@@ -10319,14 +10277,11 @@ def create_admin_router(db, is_main_bot: bool = True, bot_manager=None) -> Route
             me = await bot.get_me()
             link = f"https://t.me/{me.username}?start=resref_{target_id}"
             try:
-                await bot.send_message(
-                    target_id,
-                    tr("🎉 شما توسط ادمین به‌عنوان نماینده‌ی کمیسیونی تعیین شدید!\n\n"
+                await send_telegram(bot, db, target_id, "🎉 شما توسط ادمین به‌عنوان نماینده‌ی کمیسیونی تعیین شدید!\n\n"
                     f"🔗 لینک اختصاصی فروش شما:\n{link}\n\n"
                     f"روی هر خرید مشتریانی که با این لینک وارد شوند، {percent}٪ کارمزد به کیف پول شما اضافه "
                     "می‌شود - تا وقتی ادمین نمایندگی‌تان را غیرفعال کند.\n"
-                    "برای دیدن لینک و آمار، دستور /reseller_link را بفرستید."),
-                )
+                    "برای دیدن لینک و آمار، دستور /reseller_link را بفرستید.")
                 await _notify_user_inline_menu(bot, target_id)
             except Exception:
                 pass
@@ -12022,7 +11977,7 @@ def create_admin_router(db, is_main_bot: bool = True, bot_manager=None) -> Route
             # html_text به‌جای text تا فرمت‌بندی/ایموجی پریمیومِ خودِ ادمین در
             # پیامی که کاربر می‌بیند حفظ شود (parse_mode بات HTML است).
             reply_html = message.html_text if message.text else ""
-            await bot.send_message(user_id, tr(f"📩 پاسخ پشتیبانی:\n\n{reply_html}"))
+            await send_telegram(bot, db, user_id, f"📩 پاسخ پشتیبانی:\n\n{reply_html}")
             if message.text:
                 if not owner_only(message.from_user.id):
                     (await asyncio.to_thread(db.set_support_conversation_admin, user_id, message.from_user.id))
@@ -12141,10 +12096,7 @@ def create_admin_router(db, is_main_bot: bool = True, bot_manager=None) -> Route
             # html_text به‌جای text تا فرمت‌بندی/ایموجی پریمیومِ خودِ ادمین در
             # پاسخِ نمایش‌داده‌شده به کاربر حفظ شود (parse_mode بات HTML است).
             reply_html = message.html_text if message.text else ""
-            await bot.send_message(
-                ticket["user_id"],
-                tr(f"🎫 پاسخ پشتیبانی به تیکت «{ticket['subject']}» (#{ticket_id}):\n\n{reply_html}"),
-            )
+            await send_telegram(bot, db, ticket["user_id"], f"🎫 پاسخ پشتیبانی به تیکت «{ticket['subject']}» (#{ticket_id}):\n\n{reply_html}")
             (await asyncio.to_thread(db.claim_ticket_if_open, ticket_id, message.from_user.id))
             (await asyncio.to_thread(db.add_ticket_message, ticket_id, "admin", message.text))
             await _notify_user_inline_menu(bot, ticket["user_id"])
@@ -12169,9 +12121,7 @@ def create_admin_router(db, is_main_bot: bool = True, bot_manager=None) -> Route
             return
         (await asyncio.to_thread(db.close_ticket, ticket_id))
         try:
-            await bot.send_message(
-                ticket["user_id"], tr(f"🔒 تیکت «{ticket['subject']}» (#{ticket_id}) توسط پشتیبانی بسته شد.")
-            )
+            await send_telegram(bot, db, ticket["user_id"], f"🔒 تیکت «{ticket['subject']}» (#{ticket_id}) توسط پشتیبانی بسته شد.")
         except Exception:
             pass
         await safe_edit(call, f"✅ تیکت #{ticket_id} بسته شد.", reply_markup=kb.admin_back_kb("adm_tickets_menu"))
@@ -13460,7 +13410,7 @@ def create_admin_router(db, is_main_bot: bool = True, bot_manager=None) -> Route
             "user", tg_id,
         )
         try:
-            await bot.send_message(tg_id, f"🤝 پاداش دعوت {res['paid_count']} زیرمجموعه‌ی شما پرداخت شد.\n💰 {res['total']:,} تومان به کیف پول شما اضافه شد.")
+            await send_telegram(bot, db, tg_id, f"🤝 پاداش دعوت {res['paid_count']} زیرمجموعه‌ی شما پرداخت شد.\n💰 {res['total']:,} تومان به کیف پول شما اضافه شد.")
         except Exception:
             pass
         await call.message.answer(f"✅ {res['total']:,} تومان پاداش دعوت ({res['paid_count']:,} نفر) به کیف پول کاربر اضافه شد.")
@@ -13603,7 +13553,7 @@ def create_admin_router(db, is_main_bot: bool = True, bot_manager=None) -> Route
             return
         html_text = message.html_text if message.text else ""
         try:
-            await bot.send_message(tg_id, tr(f"📩 پیام از پشتیبانی:\n\n{html_text}"))
+            await send_telegram(bot, db, tg_id, f"📩 پیام از پشتیبانی:\n\n{html_text}")
             await _notify_user_inline_menu(bot, tg_id)
             (await asyncio.to_thread(db.log_admin_action, message.from_user.id, "user_direct_message", f"کاربر {tg_id}"))
             await _show_user_menu(message, tg_id, "✅ پیام ارسال شد.")
@@ -14030,11 +13980,8 @@ def create_admin_router(db, is_main_bot: bool = True, bot_manager=None) -> Route
         ))
         await call.answer(tr("✅ کانفیگ منتقل شد."), show_alert=True)
         try:
-            await bot.send_message(
-                target_id,
-                tr(f"📦 یک کانفیگ («{cc['display_name'] or cc['username']}») توسط پشتیبانی به حساب شما منتقل شد.\n"
-                   "برای مشاهده، حساب کاربری ← سرویس‌ها و سفارش‌های من را ببینید."),
-            )
+            await send_telegram(bot, db, target_id, f"📦 یک کانفیگ («{cc['display_name'] or cc['username']}») توسط پشتیبانی به حساب شما منتقل شد.\n"
+                   "برای مشاهده، حساب کاربری ← سرویس‌ها و سفارش‌های من را ببینید.")
         except Exception:
             pass
         await _show_user_menu(call.message, tg_id, "✅ کانفیگ به کاربر دیگر منتقل شد.")
@@ -14620,7 +14567,7 @@ def create_admin_router(db, is_main_bot: bool = True, bot_manager=None) -> Route
             return
         html_text = message.html_text if message.text else ""
         try:
-            await bot.send_message(tg_id, tr(f"📩 پیام از پشتیبانی:\n\n{html_text}"))
+            await send_telegram(bot, db, tg_id, f"📩 پیام از پشتیبانی:\n\n{html_text}")
             await _notify_user_inline_menu(bot, tg_id)
             (await asyncio.to_thread(
                 db.log_admin_action, message.from_user.id, "user_direct_message",

@@ -63,6 +63,7 @@ import tutorial_hub
 from i18n import (
     tr, set_language, reset_language, normalize_language, get_language,
     start_missing_tracking, stop_missing_tracking, pop_missing_lookups, merge_language_catalog,
+    is_language_enabled,
 )
 from broadcast_i18n import send_scheduled_broadcast
 from channel_post_scheduler import channel_post_loop
@@ -117,6 +118,15 @@ class LanguageMiddleware:
                     row = None
                 language = (row["language_code"] if row and "language_code" in row.keys() else None)
                 language = normalize_language(language or getattr(user, "language_code", None))
+                if language not in {"fa", "en"}:
+                    # زبان تلگرامِ کاربر (مثلاً ar) فقط وقتی استفاده شود که ادمین
+                    # آن را فعال کرده باشد؛ وگرنه به فارسی برمی‌گردیم.
+                    try:
+                        enabled = await asyncio.to_thread(is_language_enabled, self.db, language)
+                    except Exception:
+                        enabled = False
+                    if not enabled:
+                        language = "fa"
                 catalog = await asyncio.to_thread(self.db.translation_catalog, language) if language not in {"fa", "en"} and await asyncio.to_thread(self.db.get_language, language) else None
                 token = set_language(language, catalog)
                 if language not in {"fa", "en"}:
