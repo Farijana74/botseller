@@ -20,8 +20,8 @@ source venv/bin/activate
 pip install -r requirements.txt --quiet
 deactivate
 
-echo "🌍 به‌روزرسانی خودکار موتور ترجمه و مدل‌های زبان..."
-bash "$PWD/setup_local_translation.sh" || echo "  ⚠️ به‌روزرسانی موتور ترجمه کامل نشد؛ در اجرای بعدی دوباره تلاش می‌شود."
+echo "🌍 موتور ترجمه محلی در آپدیت عادی اجرا نمی‌شود تا چند گیگابایت دانلود ناخواسته انجام نشود."
+echo "   برای نصب/آپدیت اختیاری ترجمه از منوی مدیریت، گزینه 27 استفاده کنید."
 
 echo "🔄 ری‌استارت سرویس بات..."
 sudo systemctl restart "$SERVICE_NAME"

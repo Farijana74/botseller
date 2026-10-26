@@ -596,6 +596,12 @@ MSG_EN[menu_32]="Logout Telegram account (userbot)"
 MSG_FA[menu_32]="خروج از اکانت تلگرام (یوزربات)"
 MSG_EN[menu_33]="Telegram accounts (userbot / leak scanner)"
 MSG_FA[menu_33]="اکانت‌های تلگرام (یوزربات / اسکنر نشت کانفیگ)"
+MSG_EN[menu_34]="Setup web shop (domain + SSL)"
+MSG_FA[menu_34]="راه‌اندازی فروشگاه وب (دامنه + SSL)"
+MSG_EN[menu_35]="Configure email service (SMTP verification codes)"
+MSG_FA[menu_35]="تنظیم سرویس ایمیل (SMTP برای کد ورود)"
+MSG_EN[menu_36]="Configure Cloudflare Turnstile (web shop protection)"
+MSG_FA[menu_36]="تنظیم Cloudflare Turnstile (امنیت فروشگاه وب)"
 MSG_EN[acc_title]="TELEGRAM ACCOUNTS"
 MSG_FA[acc_title]="اکانت‌های تلگرام"
 MSG_EN[acc_1]="Login USERBOT account (AI replies to customers)"
@@ -1114,7 +1120,7 @@ update_bot() {
     systemctl list-units --full -all | grep -q "${PANEL_SERVICE}.service" && has_panel=1
     systemctl list-units --full -all | grep -q "${API_SERVICE}.service" && has_api=1
 
-    local total=4
+    local total=3
     [ "$has_miniapp" = "1" ] && total=$((total+1))
     [ "$has_panel" = "1" ] && total=$((total+1))
     [ "$has_api" = "1" ] && total=$((total+1))
@@ -1127,9 +1133,6 @@ update_bot() {
 
     step=$((step+1))
     run_step_live "$step" "$total" "$(t updating_packages)" bash -c "source '$INSTALL_DIR/venv/bin/activate' && pip install -r requirements.txt --quiet && deactivate" || failed=1
-
-    step=$((step+1))
-    run_step_live "$step" "$total" "$(t updating_translation)" bash -c "bash '$INSTALL_DIR/setup_local_translation.sh'" || failed=1
 
     step=$((step+1))
     run_step_live "$step" "$total" "$(t restarting_bot_service)" bash -c "sudo systemctl restart '$SERVICE_NAME' && sleep 2" || failed=1
@@ -2857,6 +2860,117 @@ install_shell_command() {
 install_shell_command
 
 # ---------------------------------------------------------------------------
+# Web shop setup / راه‌اندازی فروشگاه وب
+# ---------------------------------------------------------------------------
+setup_web_store() {
+    if [ ! -f "$INSTALL_DIR/miniapp/server.py" ] || [ ! -x "$INSTALL_DIR/venv/bin/uvicorn" ]; then
+        echo -e "${YELLOW}ابتدا گزینه ۱۰ (نصب/تنظیم مینی‌اپ) را اجرا کن؛ فروشگاه وب از همان بک‌اند استفاده می‌کند.${RESET}"
+        return 1
+    fi
+    if ! systemctl is-active --quiet "${SERVICE_NAME}-miniapp"; then
+        echo -e "${YELLOW}سرویس مینی‌اپ فعال نیست. ابتدا گزینه ۱۰ را اجرا کن.${RESET}"
+        return 1
+    fi
+    read -rp "دامنه فروشگاه (مثلاً shop.example.com؛ رکورد A باید به IP همین سرور اشاره کند): " DOMAIN
+    DOMAIN=$(printf '%s' "$DOMAIN" | tr -d '[:space:]')
+    if [[ ! "$DOMAIN" =~ ^[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]; then
+        echo -e "${RED}دامنه معتبر نیست.${RESET}"; return 1
+    fi
+    echo -e "${CYAN}بررسی DNS...${RESET}"
+    SERVER_IP=$(curl -4 -fsSL --max-time 8 https://ifconfig.me 2>/dev/null || true)
+    DOMAIN_IP=$(getent ahostsv4 "$DOMAIN" 2>/dev/null | awk 'NR==1{print $1}')
+    if [ -z "$DOMAIN_IP" ]; then echo -e "${RED}دامنه به IP قابل‌حل نیست؛ DNS را تنظیم کن.${RESET}"; return 1; fi
+    if [ -n "$SERVER_IP" ] && [ "$DOMAIN_IP" != "$SERVER_IP" ]; then
+        echo -e "${YELLOW}هشدار: IP دامنه ($DOMAIN_IP) با IP سرور ($SERVER_IP) یکی نیست.${RESET}"
+        read -rp "با این حال ادامه بدهم؟ (yes/no): " CONT
+        [ "$CONT" = "yes" ] || return 1
+    fi
+    sudo env DEBIAN_FRONTEND=noninteractive apt-get update -qq || return 1
+    sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y nginx certbot python3-certbot-nginx curl >/dev/null || return 1
+    local CONF="/etc/nginx/sites-available/shopvpn-store-${DOMAIN}.conf"
+    if [ -e "$CONF" ]; then
+        echo -e "${YELLOW}فایل پیکربندی این دامنه از قبل وجود دارد: $CONF${RESET}"
+        read -rp "جایگزین شود؟ (yes/no): " CONT
+        [ "$CONT" = "yes" ] || return 1
+    fi
+    sudo tee "$CONF" >/dev/null <<EOF
+server {
+    listen 80;
+    server_name $DOMAIN;
+    client_max_body_size 20m;
+    location / {
+        proxy_pass http://127.0.0.1:8001;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+}
+EOF
+    sudo ln -sfn "$CONF" "/etc/nginx/sites-enabled/shopvpn-store-${DOMAIN}.conf"
+    if ! sudo nginx -t; then echo -e "${RED}پیکربندی Nginx نامعتبر است؛ فایل را بررسی کن: $CONF${RESET}"; return 1; fi
+    sudo systemctl reload nginx || return 1
+    read -rp "ایمیل تماس برای تمدید گواهی SSL (خالی = بدون ایمیل): " CERT_EMAIL
+    if [ -n "$CERT_EMAIL" ]; then
+        sudo certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$CERT_EMAIL" --redirect || return 1
+    else
+        sudo certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos --register-unsafely-without-email --redirect || return 1
+    fi
+    echo -e "${GREEN}${BOLD}فروشگاه وب آماده است: https://$DOMAIN/store${RESET}"
+    echo -e "${DIM}مطمئن شو پورت‌های 80 و 443 در فایروال/پنل ارائه‌دهنده باز هستند.${RESET}"
+}
+
+# ---------------------------------------------------------------------------
+# Email SMTP setup / تنظیم سرویس ایمیل
+# ---------------------------------------------------------------------------
+setup_email_service() {
+    if [ ! -f "$INSTALL_DIR/.env" ]; then echo -e "${RED}فایل .env پیدا نشد؛ ابتدا بات را نصب کن.${RESET}"; return 1; fi
+    echo -e "${CYAN}اطلاعات SMTP سرویس ایمیلی را وارد کن. این گزینه سرور ایمیل نصب نمی‌کند؛ از SMTP سرویس‌دهنده ایمیل استفاده می‌کند.${RESET}"
+    read -rp "SMTP Host (مثلاً smtp.gmail.com): " SMTP_HOST
+    read -rp "SMTP Port (587 یا 465): " SMTP_PORT
+    read -rp "نام کاربری SMTP / آدرس ایمیل: " SMTP_USER
+    read -rsp "رمز SMTP یا App Password: " SMTP_PASSWORD; echo
+    read -rp "آدرس فرستنده (خالی = همان نام کاربری): " SMTP_FROM
+    read -rp "اتصال SSL مستقیم روی پورت 465؟ (y/N): " SMTP_SSL
+    SMTP_PORT=${SMTP_PORT:-587}; SMTP_FROM=${SMTP_FROM:-$SMTP_USER}
+    if [[ ! "$SMTP_PORT" =~ ^[0-9]+$ ]] || [ -z "$SMTP_HOST" ] || [ -z "$SMTP_USER" ] || [ -z "$SMTP_PASSWORD" ]; then
+        echo -e "${RED}اطلاعات ناقص یا پورت نامعتبر است.${RESET}"; return 1
+    fi
+    set_env_key SHOPVPN_SMTP_HOST "$SMTP_HOST"
+    set_env_key SHOPVPN_SMTP_PORT "$SMTP_PORT"
+    set_env_key SHOPVPN_SMTP_USER "$SMTP_USER"
+    set_env_key SHOPVPN_SMTP_PASSWORD "$SMTP_PASSWORD"
+    set_env_key SHOPVPN_SMTP_FROM "$SMTP_FROM"
+    if [[ "$SMTP_SSL" =~ ^[Yy]$ ]] || [ "$SMTP_PORT" = "465" ]; then set_env_key SHOPVPN_SMTP_SSL 1; else set_env_key SHOPVPN_SMTP_SSL 0; fi
+    if systemctl list-unit-files "${SERVICE_NAME}-miniapp.service" --no-legend 2>/dev/null | grep -q "${SERVICE_NAME}-miniapp.service"; then
+        sudo systemctl restart "${SERVICE_NAME}-miniapp" || { echo -e "${RED}ری‌استارت سرویس مینی‌اپ ناموفق بود.${RESET}"; return 1; }
+    fi
+    sudo systemctl restart "$SERVICE_NAME" >/dev/null 2>&1 || true
+    echo -e "${GREEN}تنظیمات SMTP ذخیره شد. برای تست، در فروشگاه یک کد ورود ایمیلی درخواست کن.${RESET}"
+    echo -e "${YELLOW}اگر ارسال ناموفق بود: sudo journalctl -u ${SERVICE_NAME}-miniapp -n 100 --no-pager${RESET}"
+}
+
+# ---------------------------------------------------------------------------
+# Cloudflare Turnstile / محافظت از فروشگاه وب
+# ---------------------------------------------------------------------------
+setup_web_turnstile() {
+    if [ ! -f "$INSTALL_DIR/.env" ]; then echo -e "${RED}فایل .env پیدا نشد؛ ابتدا بات را نصب کن.${RESET}"; return 1; fi
+    echo -e "${CYAN}در Cloudflare Turnstile یک widget برای دامنه فروشگاه بساز و Site Key و Secret Key را وارد کن.${RESET}"
+    echo -e "${DIM}برای غیرفعال‌کردن، هر دو مقدار را خالی بگذار.${RESET}"
+    read -rp "Turnstile Site Key: " TS_SITE
+    read -rsp "Turnstile Secret Key: " TS_SECRET; echo
+    if [ -n "$TS_SITE" ] && [ -z "$TS_SECRET" ]; then echo -e "${RED}Secret Key هم الزامی است.${RESET}"; return 1; fi
+    if [ -z "$TS_SITE" ] && [ -n "$TS_SECRET" ]; then echo -e "${RED}Site Key هم الزامی است.${RESET}"; return 1; fi
+    set_env_key SHOPVPN_TURNSTILE_SITE_KEY "$TS_SITE"
+    set_env_key SHOPVPN_TURNSTILE_SECRET_KEY "$TS_SECRET"
+    if systemctl list-unit-files "${SERVICE_NAME}-miniapp.service" --no-legend 2>/dev/null | grep -q "${SERVICE_NAME}-miniapp.service"; then
+        sudo systemctl restart "${SERVICE_NAME}-miniapp" || { echo -e "${RED}ری‌استارت سرویس مینی‌اپ ناموفق بود.${RESET}"; return 1; }
+    fi
+    echo -e "${GREEN}تنظیمات Turnstile ذخیره شد. یک خرید آزمایشی و درخواست کد ایمیل را بررسی کن.${RESET}"
+}
+
+# ---------------------------------------------------------------------------
 # Main menu / منوی اصلی
 # ---------------------------------------------------------------------------
 while true; do
@@ -2874,6 +2988,9 @@ while true; do
     menu_section sec_store
     menu_item 8 menu_8
     menu_item 9 menu_9
+    menu_item 34 menu_34
+    menu_item 35 menu_35
+    menu_item 36 menu_36
     menu_section sec_miniapp
     menu_item 10 menu_10
     menu_item 11 menu_11 "$RED"
@@ -2921,6 +3038,9 @@ while true; do
         7) stop_bot; pause ;;
         8) show_stats; pause ;;
         9) edit_env; pause ;;
+        34) setup_web_store; pause ;;
+        35) setup_email_service; pause ;;
+        36) setup_web_turnstile; pause ;;
         10) setup_miniapp; pause ;;
         11) remove_miniapp; pause ;;
         13) setup_admin_panel; pause ;;
