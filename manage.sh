@@ -749,6 +749,36 @@ MSG_FA[ws_cert_email_prompt]="ایمیل تماس برای تمدید گواهی
 MSG_EN[ws_ready]="Web shop is ready: https://%s/store"
 MSG_FA[ws_ready]="فروشگاه وب آماده است: https://%s/store"
 MSG_EN[ws_ports_hint]="Make sure ports 80 and 443 are open in your firewall / provider panel."
+MSG_EN[menu_store_status]="Web shop status"
+MSG_FA[menu_store_status]="وضعیت فروشگاه وب"
+MSG_EN[menu_store_remove]="Remove web shop domain (SSL kept)"
+MSG_FA[menu_store_remove]="حذف دامنه فروشگاه وب (SSL نگه داشته می‌شود)"
+MSG_EN[ws_status_none]="No web shop domain is configured."
+MSG_FA[ws_status_none]="هیچ دامنه‌ی فروشگاه وبی تنظیم نشده است."
+MSG_EN[ws_status_title]="Web shop status"
+MSG_FA[ws_status_title]="وضعیت فروشگاه وب"
+MSG_EN[ws_status_enabled]="nginx config enabled"
+MSG_FA[ws_status_enabled]="کانفیگ nginx فعال"
+MSG_EN[ws_status_cert]="SSL certificate"
+MSG_FA[ws_status_cert]="گواهی SSL"
+MSG_EN[ws_status_store]="/store/ HTTP code"
+MSG_FA[ws_status_store]="کد HTTP مسیر /store/"
+MSG_EN[ws_status_root]="/ HTTP code"
+MSG_FA[ws_status_root]="کد HTTP ریشه /"
+MSG_EN[ws_status_miniapp_svc]="Mini App service"
+MSG_FA[ws_status_miniapp_svc]="سرویس مینی‌اپ"
+MSG_EN[ws_yes]="yes"
+MSG_FA[ws_yes]="بله"
+MSG_EN[ws_no]="no"
+MSG_FA[ws_no]="خیر"
+MSG_EN[ws_pick_domain]="Which domain? (number): "
+MSG_FA[ws_pick_domain]="کدام دامنه؟ (شماره): "
+MSG_EN[ws_remove_warn]="This removes the web shop nginx config for %s. SSL is kept. If MINIAPP_URL points here, it is reset to the plain domain."
+MSG_FA[ws_remove_warn]="کانفیگ nginx فروشگاه وب برای %s حذف می‌شود. گواهی SSL نگه داشته می‌شود. اگر MINIAPP_URL به این دامنه اشاره کند، به آدرس ساده‌ی دامنه برمی‌گردد."
+MSG_EN[ws_removed]="Web shop domain %s removed."
+MSG_FA[ws_removed]="دامنه‌ی فروشگاه وب %s حذف شد."
+MSG_EN[ws_miniapp_url_warn]="MINIAPP_URL still points here, but no Mini App nginx config exists for this domain. Set MINIAPP_URL manually."
+MSG_FA[ws_miniapp_url_warn]="MINIAPP_URL هنوز به این دامنه اشاره می‌کند، ولی کانفیگ nginx مینی‌اپ برای این دامنه وجود ندارد. MINIAPP_URL را دستی تنظیم کن."
 MSG_FA[ws_ports_hint]="مطمئن شو پورت‌های 80 و 443 در فایروال/پنل ارائه‌دهنده باز هستند."
 MSG_EN[env_missing_install_first]="The .env file was not found; install the bot first."
 MSG_FA[env_missing_install_first]="فایل .env پیدا نشد؛ ابتدا بات را نصب کن."
@@ -3297,11 +3327,96 @@ setup_web_turnstile() {
 }
 
 # ---------------------------------------------------------------------------
+# Web shop domain: status / remove / وضعیت و حذف دامنه‌ی فروشگاه وب
+# کانفیگ‌های nginx فروشگاه با نام shopvpn-store-<domain>.conf ساخته می‌شوند.
+# ---------------------------------------------------------------------------
+web_store_domains() {
+    local f d
+    for f in /etc/nginx/sites-available/shopvpn-store-*.conf; do
+        [ -e "$f" ] || continue
+        d=$(basename "$f" .conf)
+        echo "${d#shopvpn-store-}"
+    done
+}
+
+web_store_status() {
+    local d enabled cert svc miniapp_url code_store code_root
+    local env_file="$INSTALL_DIR/.env"
+    mapfile -t DOMAINS < <(web_store_domains)
+    if [ "${#DOMAINS[@]}" -eq 0 ]; then
+        echo -e "${YELLOW}$(t ws_status_none)${RESET}"
+        return
+    fi
+    miniapp_url=""
+    [ -f "$env_file" ] && miniapp_url=$(grep -m1 "^MINIAPP_URL=" "$env_file" | cut -d= -f2-)
+    svc=$(t ws_no)
+    systemctl is-active --quiet "${SERVICE_NAME}-miniapp" 2>/dev/null && svc=$(t ws_yes)
+    echo -e "${CYAN}${BOLD}$(t ws_status_title)${RESET}"
+    for d in "${DOMAINS[@]}"; do
+        enabled=$(t ws_no)
+        [ -L "/etc/nginx/sites-enabled/shopvpn-store-${d}.conf" ] && enabled=$(t ws_yes)
+        cert=$(t ws_no)
+        [ -e "/etc/letsencrypt/live/${d}/fullchain.pem" ] && cert=$(t ws_yes)
+        # بررسی محلی از خود سرور (بدون نیاز به DNS): پاسخ مسیرها با کد HTTP
+        code_store=$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 --resolve "${d}:443:127.0.0.1" "https://${d}/store/" 2>/dev/null)
+        code_root=$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 --resolve "${d}:443:127.0.0.1" "https://${d}/" 2>/dev/null)
+        echo "  ${d}"
+        echo "    $(t ws_status_enabled): ${enabled}"
+        echo "    $(t ws_status_cert): ${cert}"
+        echo "    $(t ws_status_store): ${code_store:-—}"
+        echo "    $(t ws_status_root): ${code_root:-—}"
+    done
+    echo "    MINIAPP_URL: ${miniapp_url:-—}"
+    echo "    $(t ws_status_miniapp_svc): ${svc}"
+}
+
+remove_web_store() {
+    local DOMAIN pick idx d
+    mapfile -t DOMAINS < <(web_store_domains)
+    if [ "${#DOMAINS[@]}" -eq 0 ]; then
+        echo -e "${YELLOW}$(t ws_status_none)${RESET}"
+        return 1
+    fi
+    if [ "${#DOMAINS[@]}" -eq 1 ]; then
+        DOMAIN="${DOMAINS[0]}"
+    else
+        idx=1
+        for d in "${DOMAINS[@]}"; do
+            echo "  [${idx}] ${d}"
+            idx=$((idx + 1))
+        done
+        read -rp "$(t ws_pick_domain)" pick
+        if ! [[ "$pick" =~ ^[0-9]+$ ]] || [ "$pick" -lt 1 ] || [ "$pick" -gt "${#DOMAINS[@]}" ]; then
+            echo -e "${YELLOW}$(t cancelled)${RESET}"; return
+        fi
+        DOMAIN="${DOMAINS[$((pick - 1))]}"
+    fi
+
+    echo -e "${RED}${BOLD}$(t ws_remove_warn "$DOMAIN")${RESET}"
+    read -rp "$(t confirm_prompt)" CONFIRM
+    [ "$CONFIRM" != "yes" ] && { echo -e "${YELLOW}$(t cancelled)${RESET}"; return; }
+
+    sudo rm -f "/etc/nginx/sites-enabled/shopvpn-store-${DOMAIN}.conf" "/etc/nginx/sites-available/shopvpn-store-${DOMAIN}.conf"
+    sudo systemctl reload nginx 2>/dev/null || true
+
+    if [ -f "$INSTALL_DIR/.env" ] && grep -qF "MINIAPP_URL=https://${DOMAIN}/?app=1" "$INSTALL_DIR/.env"; then
+        if [ -e "/etc/nginx/sites-available/${DOMAIN}.conf" ]; then
+            set_env_key MINIAPP_URL "https://${DOMAIN}"
+        else
+            echo -e "${YELLOW}$(t ws_miniapp_url_warn)${RESET}"
+        fi
+    fi
+    sudo systemctl restart "$SERVICE_NAME" >/dev/null 2>&1 || true
+    echo -e "${GREEN}$(t ws_removed "$DOMAIN")${RESET}"
+}
+
+# ---------------------------------------------------------------------------
 # Main menu / منوی اصلی
 # ---------------------------------------------------------------------------
 while true; do
     print_banner
     print_status_line
+    menu_item S menu_store_status "$CYAN"
     menu_section sec_setup
     menu_item 1 menu_1
     menu_item 2 menu_2
@@ -3317,6 +3432,7 @@ while true; do
     menu_item 10 menu_34
     menu_item 11 menu_35
     menu_item 12 menu_36
+    menu_item R menu_store_remove "$RED"
     menu_section sec_miniapp
     menu_item 13 menu_10
     menu_item 14 menu_11 "$RED"
@@ -3397,6 +3513,8 @@ while true; do
         36) setup_bot_mode; pause ;;
         37) change_admin_panel_credentials; pause ;;
         38) telegram_accounts_menu ;;
+        [Ss]) web_store_status; pause ;;
+        [Rr]) remove_web_store; pause ;;
         [Ll]) toggle_lang ;;
         0) echo -e "${CYAN}$(t goodbye)${RESET}"; exit 0 ;;
         *) echo -e "${RED}$(t invalid_choice)${RESET}"; sleep 1 ;;
