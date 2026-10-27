@@ -5979,6 +5979,42 @@ def api_settings(admin=Depends(require_permission("settings"))):
     return db.get_all_settings()
 
 
+@app.get("/api/settings/sub-page-preview")
+def api_sub_page_preview(admin=Depends(require_permission("settings"))):
+    """Render a safe, data-only mock of the subscription web page for the admin live preview."""
+    import html as html_lib
+    import dedicated_sub as ds
+    template_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "sub_server", "sub_page.html")
+    with open(template_path, "r", encoding="utf-8") as fh:
+        template = fh.read()
+    settings = ds.all_settings(db)
+    mock_cc = {
+        "display_name": "سرویس نمونه", "username": "demo", "status": "active", "enabled": 1,
+        "duration_days": 30, "created_at": datetime.utcnow().isoformat(),
+        "expires_at": (datetime.utcnow()).isoformat(),
+    }
+    now = int(time.time())
+    info = {"total": 50 * ds.GB, "upload": 2 * ds.GB, "download": 5 * ds.GB, "expire": now + 25 * 86400}
+    series = {"labels": ["شنبه", "یکشنبه", "دوشنبه", "سه‌شنبه", "چهارشنبه", "پنجشنبه", "جمعه"], "values": [1.2, 1.8, 2.1, 2.7, 3.4, 4.1, 5.0]}
+    data = ds.build_page_data(mock_cc, info, [
+        "vless://00000000-0000-0000-0000-000000000000@example.com:443?security=tls&type=tcp#🇩🇪%20Demo",
+        "vmess://demo#🇳🇱%20Backup",
+    ], settings, ds._brand(settings), "https://example.com/s/demo", series, now)
+    data["live"] = True
+    nonce = secrets.token_urlsafe(12)
+    rendered = (template.replace("__NONCE__", nonce)
+                .replace("__TITLE__", html_lib.escape("پیش‌نمایش صفحه لینک ساب"))
+                .replace("__THEME__", data.get("theme", "auto"))
+                .replace("__DATA__", ds.json_for_script(data)))
+    csp = ("default-src 'none'; script-src 'nonce-%s'; style-src 'unsafe-inline' https://fonts.googleapis.com; "
+           "font-src https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'none'; "
+           "frame-ancestors 'self'; base-uri 'none'; form-action 'none'" % nonce)
+    return HTMLResponse(rendered, headers={
+        "content-security-policy": csp, "cache-control": "no-store", "referrer-policy": "no-referrer",
+        "x-content-type-options": "nosniff", "x-robots-tag": "noindex, nofollow",
+    })
+
+
 class SettingBody(BaseModel):
     key: str
     value: str
