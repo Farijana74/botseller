@@ -19,7 +19,7 @@ import math
 from datetime import datetime, timezone, timedelta
 
 from aiogram import Router, F, Bot, Dispatcher
-from aiogram.filters import CommandStart, Command
+from aiogram.filters import CommandStart, Command, CommandObject
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, BufferedInputFile, ReplyKeyboardRemove
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.base import StorageKey
@@ -33,11 +33,12 @@ from daily_quiz import answer_quiz_for_message
 from season_quiz_handlers import show_season_for_message
 from engagement_handlers import show_lootbox_for_message, show_progress_for_message
 import seasons as season_logic
-from states import BuyFlow, ContactFlow, TicketFlow, TicketReplyFlow, AIChatFlow, DiscountEntry, RenewalDiscountEntry, WalletTopup, WalletGiftCode, WalletTransfer, CoinConvert, CustomConfigFlow, AddServiceFlow, RenewalFlow, ResellerFlow, ResellerRequestFlow, ServiceRenameFlow, ServiceTransferFlow, CommissionResellerRequestFlow
+from states import BuyFlow, ContactFlow, TicketFlow, TicketReplyFlow, AIChatFlow, DiscountEntry, RenewalDiscountEntry, WalletTopup, WalletGiftCode, WalletTransfer, CoinConvert, CustomConfigFlow, AddServiceFlow, MergeFlow, RenewalFlow, ResellerFlow, ResellerRequestFlow, ServiceRenameFlow, ServiceTransferFlow, CommissionResellerRequestFlow
 import ai_support
 import ai_media
 from draft_stream import DraftStreamer
 import account_link
+import web_auth
 import receipt_ai_check
 from service_refund import (
     quote_service_refund, refund_quote_text, wallet_refund_amount, grant_service_refund_credit, refund_result_text,
@@ -45,6 +46,7 @@ from service_refund import (
 from config import MAX_TEST_PER_USER, RESELLER_DBS_DIR, resolve_db_path, DB_PATH, ADMIN_PANEL_URL
 from database import Database, DuplicateBotTokenError
 from config_delivery import deliver_config_to_user, send_individual_configs, build_qr_bytes
+import dedicated_sub
 from renewal_engine import execute_renewal, RenewalError
 import renewal_log
 #‍​‌‌​​​‌‌​‌‌​​‌​‌​‌‌​‌‌​​​‌‌​​‌​‌​‌‌​‌‌‌​​‌‌​‌‌‌‌​‌‌‌​​‌​‍
@@ -137,6 +139,14 @@ class _MessageCall:
     async def answer(self, text=None, *args, **kwargs):
         if text:
             await self.message.answer(text)
+
+
+_DIGIT_MAP = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
+
+
+def _merge_code_from(text) -> str:
+    match = re.search(r"(?<!\d)\d{8}(?!\d)", (text or "").translate(_DIGIT_MAP))
+    return match.group(0) if match else ""
 
 
 def create_user_router(db, is_main_bot: bool = True, bot_manager=None) -> Router:
@@ -641,7 +651,9 @@ def create_user_router(db, is_main_bot: bool = True, bot_manager=None) -> Router
             await message.answer(db.get_text('handlers_user.auto_95fbba11', 'ℹ️ برای ساخت اشتراک هوشمند حداقل دو اشتراک فعال لازم است.')); return
         token=await asyncio.to_thread(db.create_smart_subscription,message.from_user.id,urls)
         from config import API_BASE_URL
-        base=(db.get_setting("smart_subscription_base_url","") or API_BASE_URL).rstrip("/")
+        # اگر ساب اختصاصی روشن است، لینک هوشمند هم از دامنه‌ی همان سرور ساخته می‌شود (آن سرور endpoint را سرو می‌کند)
+        dedicated_base=dedicated_sub.base_url(db) if dedicated_sub.is_enabled(db) else ""
+        base=(db.get_setting("smart_subscription_base_url","") or dedicated_base or API_BASE_URL).rstrip("/")
         if not base:
             await message.answer(db.get_text('handlers_user.auto_c76802fa', '⛔️ آدرس عمومی API تنظیم نشده است.')); return
         await message.answer(tr(f"🔗 لینک اشتراک هوشمند شما:\n{base}/sub/smart/{token}"))
@@ -719,6 +731,127 @@ def create_user_router(db, is_main_bot: bool = True, bot_manager=None) -> Router
         except Exception:
             logging.getLogger("handlers_user").warning("ارسال کارت رفرال به گروه گزارش ناموفق بود.", exc_info=True)
 
+    @router.callback_query(F.data.startswith("weblogin_ok:"))
+    async def cb_weblogin_ok(callback: CallbackQuery):
+        """تأیید ورود به سایت وب (فقط بات اصلی)."""
+        if not is_main_bot:
+            await callback.answer()
+            return
+        code = callback.data.split(":", 1)[1]
+        ok = await asyncio.to_thread(web_auth.confirm_login, db, code, callback.from_user.id)
+        await callback.answer()
+        if ok:
+            text = db.get_text("handlers_user.weblogin.done", "✅ ورود به سایت تأیید شد. به مرورگر برگردید.")
+        else:
+            text = db.get_text(
+                "handlers_user.weblogin.expired",
+                "⌛️ این درخواست منقضی شده یا قبلاً استفاده شده است. از سایت دوباره تلاش کنید.",
+            )
+        try:
+            await callback.message.edit_text(text)
+        except TelegramBadRequest:
+            pass
+
+    async def _merge_preview_reply(message: Message, tg_id: int, code: str) -> bool:
+        allowed = await asyncio.to_thread(
+            web_auth.enforce_rate_limit, db, "merge-try:" + str(tg_id), web_auth.MERGE_TRIES_PER_HOUR, 3600
+        )
+        if not allowed:
+            await message.answer(tr("⛔ تعداد تلاش‌ها زیاد بود. کمی بعد دوباره امتحان کنید."))
+            return False
+        try:
+            info = await asyncio.to_thread(web_auth.preview_merge, db, code, tg_id, "bot")
+        except ValueError as exc:
+            await message.answer("❌ " + tr(web_auth.merge_reason_text(str(exc))))
+            return False
+        await message.answer(
+            tr("🔗 تأیید ادغام حساب") + "\n\n"
+            + tr("حساب ایمیلی {email} با این حساب تلگرام یکی می‌شود.").replace("{email}", info["email"]) + "\n"
+            + tr("موجودی، سرویس‌ها و تیکت‌های آن ایمیل به این حساب منتقل می‌شوند و این کار برگشت‌پذیر نیست.") + "\n\n"
+            + tr("⚠️ فقط اگر همین الان خودتان در سایت این درخواست را ساخته‌اید تأیید کنید."),
+            reply_markup=kb.merge_confirm_kb(code),
+        )
+        return True
+
+    @router.callback_query(F.data == "acct:merge")
+    async def cb_account_merge(call: CallbackQuery, state: FSMContext):
+        if not is_main_bot or (await asyncio.to_thread(db.get_setting, "acct_show_merge", "1")) != "1":
+            await call.answer(db.get_text('handlers_user.auto_877cd65e', 'این بخش غیرفعال است.'), show_alert=True)
+            return
+        await state.set_state(MergeFlow.waiting_code)
+        prompt = (
+            tr("🔗 ادغام با حساب ایمیلی") + "\n\n"
+            + tr("اگر در سایت با ایمیل حساب دارید، می‌توانید آن را با این حساب یکی کنید.") + "\n\n"
+            + tr("۱) در سایت وارد حساب ایمیلی شوید و «ادغام با تلگرام» را بزنید.") + "\n"
+            + tr("۲) کد ۸ رقمی را همین‌جا بفرستید.") + "\n\n"
+            + tr("یا اگر کدی ندارید، دکمه‌ی زیر را بزنید تا از اینجا کد بسازید و در سایت وارد کنید.")
+        )
+        await _safe_edit(call.message, prompt, reply_markup=kb.merge_menu_kb())
+        await call.answer()
+
+    @router.callback_query(F.data == "acct:merge_make")
+    async def cb_account_merge_make(call: CallbackQuery, state: FSMContext):
+        if not is_main_bot:
+            await call.answer()
+            return
+        await state.clear()
+        try:
+            code = await asyncio.to_thread(web_auth.create_merge_code, db, "bot", call.from_user.id)
+        except ValueError as exc:
+            await call.answer(tr(web_auth.merge_reason_text(str(exc))), show_alert=True)
+            return
+        text = (
+            tr("🔗 کد ادغام شما") + f"\n<code>{code}</code>\n\n"
+            + tr("این کد ۱۰ دقیقه اعتبار دارد. در سایت وارد حساب ایمیلی شوید، «ادغام با تلگرام» را بزنید و این کد را وارد کنید.")
+        )
+        await _safe_edit(call.message, text, parse_mode="HTML", reply_markup=kb.merge_menu_kb())
+        await call.answer()
+
+    @router.callback_query(F.data == "acct:merge_cancel")
+    async def cb_account_merge_cancel(call: CallbackQuery, state: FSMContext):
+        await state.clear()
+        text = await _account_hub_text(call.from_user.id)
+        await _safe_edit(call.message, text, parse_mode="Markdown", reply_markup=kb.account_hub_kb(db, is_main_bot))
+        await call.answer()
+
+    @router.message(Command("merge"))
+    async def cmd_merge(message: Message, command: CommandObject, state: FSMContext):
+        """ادغام حساب ایمیلی فروشگاه با این حساب تلگرام.
+        /merge            ← کد می‌سازد تا در سایت وارد شود (طرف دوم: حساب ایمیلی)
+        /merge 12345678   ← کدی را که در سایت ساخته شده بررسی و تأیید می‌کند"""
+        if not is_main_bot:
+            return
+        await state.clear()
+        tg_id = message.from_user.id
+        arg = _merge_code_from(command.args)
+        if not arg:
+            code = await asyncio.to_thread(web_auth.create_merge_code, db, "bot", tg_id)
+            await message.answer(
+                tr("🔗 کد ادغام شما") + f"\n<code>{code}</code>\n\n"
+                + tr("این کد ۱۰ دقیقه اعتبار دارد. در سایت وارد حساب ایمیلی شوید، «ادغام با تلگرام» را بزنید و این کد را وارد کنید."),
+                parse_mode="HTML",
+            )
+            return
+        await _merge_preview_reply(message, tg_id, arg)
+
+    @router.callback_query(F.data.startswith("merge_ok:"))
+    async def cb_merge_ok(callback: CallbackQuery, state: FSMContext):
+        if not is_main_bot:
+            await callback.answer()
+            return
+        await state.clear()
+        code = callback.data.split(":", 1)[1]
+        try:
+            await asyncio.to_thread(web_auth.complete_merge, db, code, callback.from_user.id, "bot")
+            text = tr("✅ ادغام انجام شد. از این پس ورود با ایمیل و ورود با تلگرام هر دو به همین یک حساب می‌رسد.")
+        except ValueError as exc:
+            text = "❌ " + tr(web_auth.merge_reason_text(str(exc)))
+        await callback.answer()
+        try:
+            await callback.message.edit_text(text)
+        except TelegramBadRequest:
+            pass
+
     @router.message(CommandStart())
     async def cmd_start(message: Message, state: FSMContext, bot: Bot):
         await state.clear()
@@ -741,6 +874,28 @@ def create_user_router(db, is_main_bot: bool = True, bot_manager=None) -> Router
         parts = (message.text or "").split(maxsplit=1)
         start_param = parts[1].strip() if len(parts) > 1 else ""
         post_start_actions = []
+
+        # ورود به سایت وب: فقط دکمه‌ی تأیید نشان داده می‌شود و بقیه‌ی /start (معافیت عضویت،
+        # منبع ورود و ...) اجرا نمی‌شود، چون این لینک از بیرون و به‌دست هر کسی می‌رسد.
+        if is_main_bot and re.fullmatch(r"weblogin_[0-9a-f]{32}", start_param):
+            login_ip, login_at = await asyncio.to_thread(web_auth.login_request_info, db, start_param[len("weblogin_"):])
+            if not login_at:
+                await message.answer("⌛️ این درخواست ورود منقضی شده است. دوباره از سایت وارد شوید.")
+                return
+            when = (datetime.fromtimestamp(login_at, timezone.utc) + timedelta(hours=3, minutes=30)).strftime("%Y-%m-%d %H:%M")
+            await message.answer(
+                db.get_text(
+                    "handlers_user.weblogin.prompt",
+                    "🔐 درخواست ورود به سایت\n"
+                    f"زمان درخواست: {when}\nآی‌پی تقریبی: {login_ip or 'نامشخص'}\n"
+                    "فقط اگر خودتان همین حالا از سایت وارد شدن را خواسته‌اید تأیید کنید؛ در غیر این صورت نادیده بگیرید.",
+                ),
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+                    text=db.get_text("handlers_user.weblogin.confirm_btn", "✅ تأیید ورود"),
+                    callback_data="weblogin_ok:" + start_param[len("weblogin_"):],
+                )]]),
+            )
+            return
 
         # طبق تصمیم صریح: ورود با هر دیپ‌لینکی (نه فقط nofj) یعنی معافیت دائمی
         # از عضویت اجباری برای همین کاربر.
@@ -1199,13 +1354,34 @@ def create_user_router(db, is_main_bot: bool = True, bot_manager=None) -> Router
         data = await state.get_data()
         pending_id = data.get("pending_discount_code_id")
         if not pending_id:
-            return data.get("discount_amount", 0) or 0, ""
+            # کدِ دستیِ قبلاً اعمال‌شده: فقط اگر برای همین محصول باشد و هنوز معتبر
+            # باشد دوباره محاسبه می‌شود؛ در غیر این‌صورت پاک می‌شود تا تخفیفِ
+            # محصول قبلی روی پلن دیگر نشت نکند.
+            applied_id = data.get("discount_code_id")
+            if not applied_id:
+                if data.get("discount_amount"):
+                    await state.update_data(discount_amount=0, discount_product_id=None)
+                return 0, ""
+            if product_id is not None and data.get("discount_product_id") != product_id:
+                await state.update_data(discount_code_id=None, discount_amount=0, discount_product_id=None)
+                return 0, ""
+            code_row = (await asyncio.to_thread(db.get_discount_code_by_id, applied_id))
+            if not code_row or not (await asyncio.to_thread(
+                db.is_discount_code_valid, code_row, total_price, product_id, user_id=user_id
+            )):
+                await state.update_data(discount_code_id=None, discount_amount=0, discount_product_id=None)
+                return 0, ""
+            discount_amount = (await asyncio.to_thread(db.compute_discount_amount, code_row, total_price))
+            await state.update_data(discount_amount=discount_amount)
+            return discount_amount, code_row["code"]
         code_row = (await asyncio.to_thread(db.get_discount_code_by_id, pending_id))
         if not (await asyncio.to_thread(db.is_discount_code_valid, code_row, total_price, product_id, user_id=user_id)):
             await state.update_data(pending_discount_code_id=None, pending_discount_code_label=None)
             return 0, ""
         discount_amount = (await asyncio.to_thread(db.compute_discount_amount, code_row, total_price))
-        await state.update_data(discount_code_id=code_row["id"], discount_amount=discount_amount)
+        await state.update_data(
+            discount_code_id=code_row["id"], discount_amount=discount_amount, discount_product_id=product_id,
+        )
         return discount_amount, code_row["code"]
 
     async def _register_product_waitlist(user_id: int, product_id: int, call: CallbackQuery = None, message: Message = None):
@@ -1239,6 +1415,9 @@ def create_user_router(db, is_main_bot: bool = True, bot_manager=None) -> Router
             return
         max_users = await _users_option(product)
         await state.update_data(buy_users_pid=None, buy_users=None)
+        _prev = await state.get_data()
+        if _prev.get("discount_code_id") and _prev.get("discount_product_id") != product_id:
+            await state.update_data(discount_code_id=None, discount_amount=0, discount_product_id=None)
         if max_users:
             await _show_users_picker(call, product, max_users)
             await call.answer()
@@ -1897,6 +2076,10 @@ def create_user_router(db, is_main_bot: bool = True, bot_manager=None) -> Router
         data = await state.get_data()
         discount_code_id = data.get("discount_code_id")
         discount_amount = data.get("discount_amount", 0) or 0
+        if discount_code_id and data.get("discount_product_id") != product_id:
+            # کدِ اعمال‌شده برای محصول دیگری بوده؛ روی این خرید نباید اثر بگذارد
+            discount_code_id, discount_amount = None, 0
+            await state.update_data(discount_code_id=None, discount_amount=0, discount_product_id=None)
 
         users = _chosen_users(data, product)
         if users:
@@ -3510,7 +3693,7 @@ def create_user_router(db, is_main_bot: bool = True, bot_manager=None) -> Router
     @router.message(F.text.func(lambda t: t in (db.get_setting("btn_my_orders"), tr(db.get_setting("btn_my_orders")))))
     async def my_orders(message: Message):
         text = await _account_hub_text(message.from_user.id)
-        await message.answer(text, parse_mode="Markdown", reply_markup=kb.account_hub_kb(db))
+        await message.answer(text, parse_mode="Markdown", reply_markup=kb.account_hub_kb(db, is_main_bot))
 
     @router.message(F.text.func(lambda t: t in (db.get_setting("btn_tutorial"), tr(db.get_setting("btn_tutorial")))))
     async def tutorial_menu_entry(message: Message):
@@ -3526,7 +3709,7 @@ def create_user_router(db, is_main_bot: bool = True, bot_manager=None) -> Router
     @router.callback_query(F.data == "acct:hub")
     async def cb_account_hub(call: CallbackQuery):
         text = await _account_hub_text(call.from_user.id)
-        await _safe_edit(call.message, text, parse_mode="Markdown", reply_markup=kb.account_hub_kb(db))
+        await _safe_edit(call.message, text, parse_mode="Markdown", reply_markup=kb.account_hub_kb(db, is_main_bot))
         await call.answer()
 
     @router.callback_query(F.data == "acct:language")
@@ -3564,6 +3747,15 @@ def create_user_router(db, is_main_bot: bool = True, bot_manager=None) -> Router
         fake_message = call.message.model_copy(update={"from_user": call.from_user})
         await wallet_menu(fake_message)
 
+    @router.message(MergeFlow.waiting_code)
+    async def account_merge_receive(message: Message, state: FSMContext):
+        code = _merge_code_from(message.text)
+        if not code:
+            await message.answer(tr("کد باید ۸ رقم باشد. دوباره بفرستید."), reply_markup=kb.merge_menu_kb())
+            return
+        if await _merge_preview_reply(message, message.from_user.id, code):
+            await state.clear()
+
     @router.callback_query(F.data == "acct:addsvc")
     async def cb_account_add_service(call: CallbackQuery, state: FSMContext):
         if (await asyncio.to_thread(db.get_setting, "acct_show_add_service", "1")) != "1":
@@ -3587,7 +3779,7 @@ def create_user_router(db, is_main_bot: bool = True, bot_manager=None) -> Router
     async def cb_account_add_service_cancel(call: CallbackQuery, state: FSMContext):
         await state.clear()
         text = await _account_hub_text(call.from_user.id)
-        await _safe_edit(call.message, text, parse_mode="Markdown", reply_markup=kb.account_hub_kb(db))
+        await _safe_edit(call.message, text, parse_mode="Markdown", reply_markup=kb.account_hub_kb(db, is_main_bot))
         await call.answer()
 
     @router.message(AddServiceFlow.waiting_input)
@@ -3880,7 +4072,8 @@ def create_user_router(db, is_main_bot: bool = True, bot_manager=None) -> Router
             elif cc["expires_at"]:
                 text += f"📅 انقضا: {to_jalali_str(cc['expires_at'], with_time=True)}\n"
             if sub_url:
-                text += f"🔗 `{sub_url}`\n"
+                shown_url = await asyncio.to_thread(dedicated_sub.dedicated_link_for_upstream, db, sub_url)
+                text += f"🔗 `{shown_url}`\n"
                 info = await fetch_sub_info(sub_url)
                 text += f"\n{format_sub_info_fa(info)}"
                 if str(sub_url).startswith(("http://", "https://")):
@@ -4244,6 +4437,7 @@ def create_user_router(db, is_main_bot: bool = True, bot_manager=None) -> Router
             await call.answer(db.get_text('handlers_user.auto_4e32a60a', 'لینکی برای ساخت کیوآر پیدا نشد.'), show_alert=True)
             return
         await call.answer()
+        link = await asyncio.to_thread(dedicated_sub.dedicated_link_for_upstream, db, link)
         photo = BufferedInputFile(build_qr_bytes(link, db=db), filename="config_qr.png")
         await bot.send_photo(call.from_user.id, photo, caption=tr("⬜ کیوآر کانفیگ شما"))
 
@@ -8019,6 +8213,7 @@ def create_user_router(db, is_main_bot: bool = True, bot_manager=None) -> Router
         if not link:
             await message.answer(db.get_text('handlers_user.auto_1e7d994f', '⛔️ لینکی برای ساخت کیوآر پیدا نشد.'))
             return
+        link = await asyncio.to_thread(dedicated_sub.dedicated_link_for_upstream, db, link)
         photo = BufferedInputFile(build_qr_bytes(link, db=db), filename="config_qr.png")
         await bot.send_photo(user_id, photo, caption=tr("⬜ کیوآر کانفیگ شما"))
 

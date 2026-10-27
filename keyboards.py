@@ -641,10 +641,11 @@ _ACCOUNT_HUB_CALLBACKS = {
     # صندوق شانس: ورودی جدا در حساب کاربری (خریدش مثل یک محصول با همه‌ی روش‌های پرداخت است)
     "acct_lootbox": ("acct_show_lootbox", "lb_menu"),
     "acct_add_service": ("acct_show_add_service", "acct:addsvc"),
+    "acct_merge": ("acct_show_merge", "acct:merge"),
 }
 
 
-def account_hub_kb(db) -> InlineKeyboardMarkup:
+def account_hub_kb(db, is_main_bot: bool = True) -> InlineKeyboardMarkup:
     from database import ACCOUNT_HUB_META, DEFAULT_ACCOUNT_HUB_ORDER
     entries = []
     order = db.get_custom_order("account_hub", DEFAULT_ACCOUNT_HUB_ORDER)
@@ -653,6 +654,8 @@ def account_hub_kb(db) -> InlineKeyboardMarkup:
         if db.get_setting(toggle_key, "1") != "1":
             continue
         if key == "acct_tutorial" and tutorial_hub.GENERAL not in db.get_tutorial_bound_targets():
+            continue
+        if key == "acct_merge" and not is_main_bot:
             continue
         # دکمه‌ی زیرمجموعه‌گیری فقط وقتی نشان داده شود که کلید اصلی و حداقل یکی از
         # سه مدل پاداش روشن باشد (هم‌رفتار با item_referral در منوی اصلی)؛ وگرنه
@@ -681,6 +684,20 @@ def account_hub_kb(db) -> InlineKeyboardMarkup:
 def add_service_cancel_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=tr("❌ انصراف"), callback_data="acct:addsvc_cancel")],
+    ])
+
+
+def merge_menu_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=tr("🆕 ساخت کد از اینجا"), callback_data="acct:merge_make")],
+        [InlineKeyboardButton(text=tr("⬅️ بازگشت"), callback_data="acct:merge_cancel")],
+    ])
+
+
+def merge_confirm_kb(code: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=tr("✅ تأیید ادغام"), callback_data="merge_ok:" + code)],
+        [InlineKeyboardButton(text=tr("❌ انصراف"), callback_data="acct:merge_cancel")],
     ])
 
 
@@ -1666,6 +1683,7 @@ ADMIN_PANEL_ITEMS = [
     ("adm_engage", "🎁 صندوق شانس و پیشرفت", "eng_adm"),
     ("adm_spam_settings", "🛡 ضداسپم کاربران", "adm_spam_settings"),
     ("adm_gswitch", "🔌 سوئیچ سراسری ربات (خاموش/روشن)", "adm_gswitch"),
+    ("adm_dsub", "🔗 ساب اختصاصی (دامنه، صفحه‌ی وب، اپ‌ها)", "adm_dsub"),
     ("adm_temp_message", "⏳ پیام موقت (خودحذف‌شونده)", "adm_temp_message"),
     ("adm_set_support_contact", "📞 روش‌های ارتباط با پشتیبانی", "adm_set_support_contact"),
     ("adm_ai_support_settings", "🤖 دستیار پشتیبانی و سوالات متداول", "adm_ai_support_settings"),
@@ -1720,6 +1738,7 @@ ADMIN_PANEL_CATEGORIES = [
         "adm_service_alert_channel",
         "adm_custom_config_settings",
         "adm_panel_servers",
+        "adm_dsub",
         "adm_delivery_settings",
         "adm_renewal_pricing",
     ]),

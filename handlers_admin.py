@@ -55,6 +55,7 @@ import ai_admin
 import admin_help
 import ai_media
 import admin_tools
+import admin_dedicated_sub
 import admin_campaign
 import admin_channel_plan
 import admin_channel_engage
@@ -15423,6 +15424,7 @@ def create_admin_router(db, is_main_bot: bool = True, bot_manager=None) -> Route
     )
 
     admin_campaign.register(router, db, senior_admin_only, deny_mid)
+    admin_dedicated_sub.register(router, db, senior_admin_only, deny_mid, replace_admin_view)
     admin_channel_posts.register(router, db, senior_admin_only, deny_mid)
     admin_channel_engage.register(router, db, senior_admin_only, deny_mid)
     admin_post_brand.register(router, db, senior_admin_only, deny_mid)

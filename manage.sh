@@ -467,6 +467,56 @@ MSG_EN[prompt_domain_used_api]="What domain did you use for the integration API?
 MSG_FA[prompt_domain_used_api]="دامنه‌ای که برای API یکپارچه‌سازی استفاده کرده بودی چه بود؟ (برای حذف کانفیگ nginx): "
 MSG_EN[api_removed]="✅ Integration API removed."
 MSG_FA[api_removed]="✅ API یکپارچه‌سازی حذف شد."
+MSG_EN[lbl_dsub]="Dedicated Sub"
+MSG_FA[lbl_dsub]="ساب اختصاصی"
+MSG_EN[sec_dsub]="DEDICATED SUBSCRIPTION SERVER"
+MSG_FA[sec_dsub]="سرور ساب اختصاصی"
+MSG_EN[menu_37]="Setup dedicated sub server (domain + SSL + service)"
+MSG_FA[menu_37]="نصب/تنظیم سرور ساب اختصاصی (دامنه + SSL + سرویس)"
+MSG_EN[menu_38]="Turn dedicated sub ON / OFF"
+MSG_FA[menu_38]="روشن/خاموش کردن ساب اختصاصی"
+MSG_EN[menu_39]="Update dedicated sub server"
+MSG_FA[menu_39]="آپدیت سرور ساب اختصاصی"
+MSG_EN[menu_40]="Remove dedicated sub server"
+MSG_FA[menu_40]="حذف سرور ساب اختصاصی"
+MSG_EN[dsub_dir_missing]="⛔️ sub_server folder not found. Update the project code first (option 2)."
+MSG_FA[dsub_dir_missing]="⛔️ پوشه sub_server پیدا نشد. اول باید کد پروژه را آپدیت کنی (گزینه ۲)."
+MSG_EN[prompt_domain_dsub]="Enter a dedicated domain pointing to this server's IP for the sub links (e.g. sub.example.com): "
+MSG_FA[prompt_domain_dsub]="یک دامنه‌ی جدا که به IP همین سرور اشاره می‌کند برای لینک‌های ساب را وارد کن (مثلاً sub.example.com): "
+MSG_EN[creating_dsub_service]="⚙️ Creating the systemd service for the dedicated sub server..."
+MSG_FA[creating_dsub_service]="⚙️ ساخت سرویس systemd برای سرور ساب اختصاصی..."
+MSG_EN[dsub_env_saved]="✅ Saved DEDICATED_SUB_URL in .env."
+MSG_FA[dsub_env_saved]="✅ آدرس DEDICATED_SUB_URL در .env ذخیره شد."
+MSG_EN[dsub_ready]="✅ Dedicated sub server is ready: %s"
+MSG_FA[dsub_ready]="✅ سرور ساب اختصاصی آماده است: %s"
+MSG_EN[dsub_health_ok]="✅ Health check passed (the server answers over HTTPS)."
+MSG_FA[dsub_health_ok]="✅ تست سلامت موفق بود (سرور روی HTTPS پاسخ می‌دهد)."
+MSG_EN[dsub_health_fail]="⚠️ Health check failed. Look at: sudo journalctl -u %s -n 50 --no-pager"
+MSG_FA[dsub_health_fail]="⚠️ تست سلامت ناموفق بود. بررسی کن: sudo journalctl -u %s -n 50 --no-pager"
+MSG_EN[dsub_enable_ask]="Turn the dedicated sub ON now? (Y/n): "
+MSG_FA[dsub_enable_ask]="ساب اختصاصی همین الان روشن شود؟ (Y/n): "
+MSG_EN[dsub_hint]="All other settings (page design, texts, apps, headers) are in the Telegram bot: Admin panel → Dedicated Sub."
+MSG_FA[dsub_hint]="بقیه‌ی تنظیمات (طراحی صفحه، متن‌ها، برنامه‌ها، هدرها) داخل بات تلگرام است: پنل مدیریت ← ساب اختصاصی."
+MSG_EN[dsub_not_installed]="⛔️ Dedicated sub server not installed yet. Run option 37 first."
+MSG_FA[dsub_not_installed]="⛔️ سرور ساب اختصاصی هنوز نصب نشده. اول گزینه ۳۷ را بزن."
+MSG_EN[dsub_state]="Dedicated sub is currently: %s"
+MSG_FA[dsub_state]="وضعیت فعلی ساب اختصاصی: %s"
+MSG_EN[dsub_toggle_prompt]="1) Turn ON   2) Turn OFF   (Enter = cancel): "
+MSG_FA[dsub_toggle_prompt]="۱) روشن   ۲) خاموش   (Enter = انصراف): "
+MSG_EN[dsub_toggle_off_note]="OFF keeps links that were already sent to users working (plain pass-through); new links use the panel address again."
+MSG_FA[dsub_toggle_off_note]="حالت خاموش لینک‌هایی که قبلاً به کاربران داده شده را سالم نگه می‌دارد (عبور ساده)؛ لینک‌های جدید دوباره آدرس خود پنل می‌شوند."
+MSG_EN[restarting_dsub_service]="♻️ Restarting dedicated sub server"
+MSG_FA[restarting_dsub_service]="♻️ ری‌استارت سرور ساب اختصاصی"
+MSG_EN[update_dsub_header]="Updating Dedicated Sub Server"
+MSG_FA[update_dsub_header]="آپدیت سرور ساب اختصاصی"
+MSG_EN[dsub_update_done]="✅ Dedicated sub server updated."
+MSG_FA[dsub_update_done]="✅ آپدیت سرور ساب اختصاصی انجام شد."
+MSG_EN[remove_dsub_warn]="⚠️ This removes the sub server and its nginx config. Sub links already given to users will STOP working (turn it OFF instead if you only want to disable the feature). The SSL certificate is kept."
+MSG_FA[remove_dsub_warn]="⚠️ این کار سرور ساب و کانفیگ nginx آن را حذف می‌کند. لینک‌های ساب که قبلاً به کاربران داده شده از کار می‌افتند (اگر فقط می‌خواهی قابلیت را غیرفعال کنی «خاموش کردن» را بزن). گواهی SSL نگه داشته می‌شود."
+MSG_EN[prompt_domain_used_dsub]="What domain did you use for the dedicated sub server? (to remove its nginx config): "
+MSG_FA[prompt_domain_used_dsub]="دامنه‌ای که برای سرور ساب اختصاصی استفاده کرده بودی چه بود؟ (برای حذف کانفیگ nginx): "
+MSG_EN[dsub_removed]="✅ Dedicated sub server removed."
+MSG_FA[dsub_removed]="✅ سرور ساب اختصاصی حذف شد."
 
 # setup_panel_proxy / remove_panel_proxy
 MSG_EN[prompt_domain_panel_proxy]="Domain for the VPN panel (e.g. panel.example.com): "
@@ -806,6 +856,7 @@ print_status_line() {
     status_row lbl_miniapp "$(unit_state "${SERVICE_NAME}-miniapp")"
     status_row lbl_panel "$(unit_state "${SERVICE_NAME}-adminpanel")"
     status_row lbl_api "$(unit_state "${SERVICE_NAME}-api")"
+    status_row lbl_dsub "$(unit_state "${SERVICE_NAME}-sub")"
     echo ""
 }
 
@@ -1115,15 +1166,18 @@ update_bot() {
     MINIAPP_SERVICE="${SERVICE_NAME}-miniapp"
     PANEL_SERVICE="${SERVICE_NAME}-adminpanel"
     API_SERVICE="${SERVICE_NAME}-api"
-    local has_miniapp=0 has_panel=0 has_api=0
+    DSUB_SERVICE="${SERVICE_NAME}-sub"
+    local has_miniapp=0 has_panel=0 has_api=0 has_dsub=0
     systemctl list-units --full -all | grep -q "${MINIAPP_SERVICE}.service" && has_miniapp=1
     systemctl list-units --full -all | grep -q "${PANEL_SERVICE}.service" && has_panel=1
     systemctl list-units --full -all | grep -q "${API_SERVICE}.service" && has_api=1
+    systemctl list-units --full -all | grep -q "${DSUB_SERVICE}.service" && has_dsub=1
 
     local total=3
     [ "$has_miniapp" = "1" ] && total=$((total+1))
     [ "$has_panel" = "1" ] && total=$((total+1))
     [ "$has_api" = "1" ] && total=$((total+1))
+    [ "$has_dsub" = "1" ] && total=$((total+1))
     local step=0 failed=0
 
     section_header "$(t update_bot_header)"
@@ -1150,6 +1204,11 @@ update_bot() {
     if [ "$has_api" = "1" ]; then
         step=$((step+1))
         run_step_live "$step" "$total" "$(t restarting_api_service)" bash -c "sudo systemctl restart '$API_SERVICE' && sleep 2" || failed=1
+    fi
+
+    if [ "$has_dsub" = "1" ]; then
+        step=$((step+1))
+        run_step_live "$step" "$total" "$(t restarting_dsub_service)" bash -c "sudo systemctl restart '$DSUB_SERVICE' && sleep 2" || failed=1
     fi
 
     draw_rule
@@ -1206,7 +1265,7 @@ shopvpn_nginx_domains() {
         for f in "$dir"/*.conf; do
             [ -f "$f" ] || continue
             if grep -q "managed-by-shopvpn-panel-proxy" "$f" 2>/dev/null \
-               || grep -qE "proxy_pass http://127\.0\.0\.1:(8001|8002|8003|${wport});" "$f" 2>/dev/null; then
+               || grep -qE "proxy_pass http://127\.0\.0\.1:(8001|8002|8003|8004|${wport});" "$f" 2>/dev/null; then
                 d=$(basename "$f" .conf)
                 echo "$d"
             fi
@@ -1257,7 +1316,7 @@ factory_reset() {
     fi
 
     cd "$HOME" || cd /
-    for unit in "$SERVICE_NAME" "${SERVICE_NAME}-miniapp" "${SERVICE_NAME}-adminpanel" "${SERVICE_NAME}-api" "$LIBRETRANSLATE_SERVICE"; do
+    for unit in "$SERVICE_NAME" "${SERVICE_NAME}-miniapp" "${SERVICE_NAME}-adminpanel" "${SERVICE_NAME}-api" "${SERVICE_NAME}-sub" "$LIBRETRANSLATE_SERVICE"; do
         sudo systemctl stop "$unit" >/dev/null 2>&1 || true
         sudo systemctl disable "$unit" >/dev/null 2>&1 || true
         sudo rm -f "/etc/systemd/system/${unit}.service"
@@ -1418,12 +1477,12 @@ edit_env() {
     [ -n "$NEW_OWNER" ] && set_env_key OWNER_ID "$NEW_OWNER"
 
     echo -e "${GREEN}$(t saved_restarting)${RESET}"
-    for unit in "$SERVICE_NAME" "${SERVICE_NAME}-miniapp" "${SERVICE_NAME}-adminpanel" "${SERVICE_NAME}-api"; do
+    for unit in "$SERVICE_NAME" "${SERVICE_NAME}-miniapp" "${SERVICE_NAME}-adminpanel" "${SERVICE_NAME}-api" "${SERVICE_NAME}-sub"; do
         [ -f "/etc/systemd/system/${unit}.service" ] || continue
         sudo systemctl restart "$unit"
     done
     sleep 3
-    for unit in "$SERVICE_NAME" "${SERVICE_NAME}-miniapp" "${SERVICE_NAME}-adminpanel" "${SERVICE_NAME}-api"; do
+    for unit in "$SERVICE_NAME" "${SERVICE_NAME}-miniapp" "${SERVICE_NAME}-adminpanel" "${SERVICE_NAME}-api" "${SERVICE_NAME}-sub"; do
         [ -f "/etc/systemd/system/${unit}.service" ] || continue
         if ! systemctl is-active --quiet "$unit"; then
             failed=1
@@ -2511,6 +2570,196 @@ remove_api() {
 }
 
 # ---------------------------------------------------------------------------
+# Dedicated sub server (own domain for subscription links + web page)
+# سرور ساب اختصاصی (دامنه‌ی جدا برای لینک ساب + صفحه‌ی وب)
+# Everything else is configured from the Telegram bot admin panel.
+# ---------------------------------------------------------------------------
+DSUB_PORT=8004
+
+dsub_cli() {
+    ( cd "$INSTALL_DIR" && source venv/bin/activate && python -m dedicated_sub "$1"; deactivate ) 2>/dev/null
+}
+
+setup_dedicated_sub() {
+    if [ ! -d "$INSTALL_DIR/sub_server" ]; then
+        echo -e "${RED}$(t dsub_dir_missing)${RESET}"
+        return
+    fi
+
+    read -rp "$(t prompt_domain_dsub)" DOMAIN
+    if [ -z "$DOMAIN" ]; then
+        echo -e "${RED}$(t domain_empty)${RESET}"
+        return
+    fi
+
+    echo -e "${CYAN}$(t checking_dns)${RESET}"
+    SERVER_IP=$(curl -fsSL ifconfig.me || echo "")
+    DOMAIN_IP=$(getent ahosts "$DOMAIN" 2>/dev/null | awk '{print $1}' | head -1)
+    if [ -n "$SERVER_IP" ] && [ -n "$DOMAIN_IP" ] && [ "$SERVER_IP" != "$DOMAIN_IP" ]; then
+        echo -e "${YELLOW}$(t dns_mismatch_warn "$SERVER_IP" "$DOMAIN_IP")${RESET}"
+        read -rp "$(t continue_prompt)" CONT
+        [ "$CONT" != "yes" ] && return
+    fi
+
+    echo -e "${CYAN}$(t installing_nginx)${RESET}"
+    sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a NEEDRESTART_SUSPEND=1 apt-get update -qq
+    timeout 120 sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a NEEDRESTART_SUSPEND=1 \
+        apt-get install -y -qq nginx certbot python3-certbot-nginx > /dev/null
+    tune_nginx_for_scale
+
+    echo -e "${CYAN}$(t installing_miniapp_pkgs)${RESET}"
+    cd "$INSTALL_DIR"
+    source venv/bin/activate
+    pip install -r requirements.txt --quiet
+    deactivate
+
+    echo -e "${CYAN}$(t creating_dsub_service)${RESET}"
+    DSUB_SERVICE="${SERVICE_NAME}-sub"
+    sudo bash -c "cat > /etc/systemd/system/${DSUB_SERVICE}.service" <<EOF
+[Unit]
+Description=ShopVPN Dedicated Subscription Server
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=$INSTALL_DIR
+ExecStart=$INSTALL_DIR/venv/bin/uvicorn sub_server.server:app --host 127.0.0.1 --port $DSUB_PORT --workers 1 --no-proxy-headers
+Restart=always
+RestartSec=5
+User=$(whoami)
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    sudo systemctl daemon-reload
+    sudo systemctl enable "$DSUB_SERVICE" > /dev/null 2>&1
+    sudo systemctl restart "$DSUB_SERVICE"
+
+    echo -e "${CYAN}$(t configuring_nginx "$DOMAIN")${RESET}"
+    # X-Forwarded-For is overwritten (not appended) so the rate limiter and
+    # access log can trust it.
+    sudo bash -c "cat > /etc/nginx/sites-available/${DOMAIN}.conf" <<EOF
+server {
+    listen 80;
+    server_name $DOMAIN;
+    client_max_body_size 1m;
+    proxy_read_timeout 60s;
+    proxy_send_timeout 60s;
+
+    location / {
+        proxy_pass http://127.0.0.1:$DSUB_PORT;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$remote_addr;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+}
+EOF
+    sudo ln -sf "/etc/nginx/sites-available/${DOMAIN}.conf" "/etc/nginx/sites-enabled/${DOMAIN}.conf"
+    if ! sudo nginx -t > /dev/null 2>&1; then
+        echo -e "${RED}$(t nginx_error "$(sudo nginx -t 2>&1)")${RESET}"
+        return
+    fi
+    sudo systemctl reload nginx
+
+    echo -e "${CYAN}$(t getting_ssl)${RESET}"
+    sudo certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos \
+        --register-unsafely-without-email --redirect
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}$(t ssl_failed)${RESET}"
+        return
+    fi
+
+    set_env_key DEDICATED_SUB_URL "https://$DOMAIN"
+    set_env_key DEDICATED_SUB_PORT "$DSUB_PORT"
+    echo -e "${GREEN}$(t dsub_env_saved)${RESET}"
+    sudo systemctl restart "$DSUB_SERVICE" 2>/dev/null || true
+    sudo systemctl restart "$SERVICE_NAME" 2>/dev/null || true
+
+    sleep 2
+    if curl -fsS -m 10 "https://$DOMAIN/healthz" > /dev/null 2>&1; then
+        echo -e "${GREEN}$(t dsub_health_ok)${RESET}"
+    else
+        echo -e "${YELLOW}$(t dsub_health_fail "$DSUB_SERVICE")${RESET}"
+    fi
+
+    echo -e "${GREEN}${BOLD}$(t dsub_ready "https://$DOMAIN")${RESET}"
+    read -rp "$(t dsub_enable_ask)" ANS
+    if [[ ! "$ANS" =~ ^[nN]$ ]]; then
+        dsub_cli enable
+    fi
+    echo -e "${GREEN}$(t dsub_hint)${RESET}"
+}
+
+toggle_dedicated_sub() {
+    DSUB_SERVICE="${SERVICE_NAME}-sub"
+    if [ ! -f "/etc/systemd/system/${DSUB_SERVICE}.service" ]; then
+        echo -e "${RED}$(t dsub_not_installed)${RESET}"
+        return
+    fi
+    local cur
+    cur=$(dsub_cli status | head -1)
+    echo -e "${CYAN}$(t dsub_state "${cur:-?}")${RESET}"
+    echo -e "${DIM}$(t dsub_toggle_off_note)${RESET}"
+    read -rp "$(t dsub_toggle_prompt)" CH
+    case "$CH" in
+        1) dsub_cli enable | head -1 ;;
+        2) dsub_cli disable | head -1 ;;
+        *) echo -e "${YELLOW}$(t cancelled)${RESET}" ;;
+    esac
+}
+
+update_dedicated_sub() {
+    DSUB_SERVICE="${SERVICE_NAME}-sub"
+    if ! systemctl list-units --full -all | grep -q "${DSUB_SERVICE}.service"; then
+        echo -e "${RED}$(t dsub_not_installed)${RESET}"
+        return
+    fi
+    if [ ! -f "$INSTALL_DIR/main.py" ]; then
+        echo -e "${RED}$(t bot_not_installed)${RESET}"
+        return
+    fi
+    cd "$INSTALL_DIR"
+
+    local failed=0
+    section_header "$(t update_dsub_header)"
+    run_step_live 1 3 "$(t fetching_latest)" fetch_project_code "$INSTALL_DIR" || failed=1
+    run_step_live 2 3 "$(t updating_packages)" bash -c "source '$INSTALL_DIR/venv/bin/activate' && pip install -r requirements.txt --quiet && deactivate" || failed=1
+    run_step_live 3 3 "$(t restarting_dsub_service)" bash -c "sudo systemctl restart '$DSUB_SERVICE' && sleep 2" || failed=1
+
+    draw_rule
+    if [ "$failed" = "0" ] && systemctl is-active --quiet "$DSUB_SERVICE"; then
+        echo -e "  ${GREEN}${BOLD}$(t dsub_update_done)${RESET}"
+    else
+        echo -e "  ${RED}$(t install_failed "$DSUB_SERVICE")${RESET}"
+    fi
+}
+
+remove_dedicated_sub() {
+    echo -e "${RED}${BOLD}$(t remove_dsub_warn)${RESET}"
+    read -rp "$(t confirm_prompt)" CONFIRM
+    [ "$CONFIRM" != "yes" ] && { echo -e "${YELLOW}$(t cancelled)${RESET}"; return; }
+
+    dsub_cli disable > /dev/null
+    DSUB_SERVICE="${SERVICE_NAME}-sub"
+    sudo systemctl stop "$DSUB_SERVICE" 2>/dev/null || true
+    sudo systemctl disable "$DSUB_SERVICE" 2>/dev/null || true
+    sudo rm -f "/etc/systemd/system/${DSUB_SERVICE}.service"
+    sudo systemctl daemon-reload
+
+    read -rp "$(t prompt_domain_used_dsub)" DOMAIN
+    if [ -n "$DOMAIN" ]; then
+        sudo rm -f "/etc/nginx/sites-enabled/${DOMAIN}.conf" "/etc/nginx/sites-available/${DOMAIN}.conf"
+        sudo systemctl reload nginx 2>/dev/null || true
+    fi
+    if [ -f "$INSTALL_DIR/.env" ]; then
+        sed -i '/^DEDICATED_SUB_URL=/d;/^DEDICATED_SUB_PORT=/d' "$INSTALL_DIR/.env"
+    fi
+    sudo systemctl restart "$SERVICE_NAME" 2>/dev/null || true
+    echo -e "${GREEN}$(t dsub_removed)${RESET}"
+}
+
+# ---------------------------------------------------------------------------
 # Action: install/manage the project-owned local translation runtime.
 # Everything is automated: Argos models + isolated LibreTranslate fallback.
 # ---------------------------------------------------------------------------
@@ -3009,6 +3258,11 @@ while true; do
     menu_item 24 menu_24
     menu_item 25 menu_25 "$RED"
     menu_item 26 menu_26
+    menu_section sec_dsub
+    menu_item 37 menu_37
+    menu_item 38 menu_38
+    menu_item 39 menu_39
+    menu_item 40 menu_40 "$RED"
     menu_section sec_translation
     menu_item 27 menu_27
     menu_item 28 menu_28 "$RED"
@@ -3057,6 +3311,10 @@ while true; do
         24) setup_api; pause ;;
         25) remove_api; pause ;;
         26) update_api; pause ;;
+        37) setup_dedicated_sub; pause ;;
+        38) toggle_dedicated_sub; pause ;;
+        39) update_dedicated_sub; pause ;;
+        40) remove_dedicated_sub; pause ;;
         27) setup_libretranslate; pause ;;
         28) remove_libretranslate; pause ;;
         29) factory_reset; pause ;;
