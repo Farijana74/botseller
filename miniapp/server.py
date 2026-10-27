@@ -53,11 +53,12 @@ class NoCacheStaticFiles(StaticFiles):
         return response
 from fastapi.responses import HTMLResponse, Response, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 import logging
 from types import SimpleNamespace
 import sqlite3
+import ipaddress
 
 logging.basicConfig(level=logging.INFO)
 
@@ -76,6 +77,7 @@ import extra_gateway_clients
 import extra_gateway_payment
 import extra_gateway_registry
 import payment_engine
+import web_auth
 import ai_support
 import receipt_ai_check
 import report_router
@@ -112,6 +114,23 @@ app = FastAPI(title="V2Ray Shop Mini App API")
 
 # Backend i18n: every API request gets a language context from the frontend header.
 # The frontend sends X-Language based on its persisted sv-lang setting.
+@app.middleware("http")
+async def _web_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    # Defense-in-depth headers; frame-ancestors blocks embedding the storefront/API.
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    # Apply anti-embedding policy to the public web store only; do not alter the
+    # embedding behavior of the existing Telegram mini-app pages.
+    if request.url.path == "/store" or request.url.path.startswith("/store/"):
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Content-Security-Policy", "frame-ancestors 'none'; object-src 'none'; base-uri 'self'")
+    if request.url.scheme == "https":
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    return response
+
+
 @app.middleware("http")
 async def _i18n_request_language(request: Request, call_next):
     language = normalize_language(request.headers.get("x-language") or request.headers.get("accept-language"))
@@ -232,7 +251,11 @@ def get_reseller_backend(tg_id: int, db: Database, tenant: Tenant):
         row = None
     return main_db, (row["owner_telegram_id"] if row else None)
 
-def get_verified_user(x_init_data: str = Header(...), tenant: Tenant = Depends(get_tenant)):
+def get_verified_user(
+    x_init_data: Optional[str] = Header(None),
+    tenant: Tenant = Depends(get_tenant),
+    x_web_token: Optional[str] = Header(None),
+):
     """initData را با توکن همان مستأجر تایید می‌کند. خروجی: (tg_id, db, tenant)
 
     نکته: کاربر را همین‌جا هم در جدول users ثبت/به‌روز می‌کنیم (نه فقط داخل
@@ -240,6 +263,14 @@ def get_verified_user(x_init_data: str = Header(...), tenant: Tenant = Depends(g
     قبلاً /start را در بات زده باشد. بدون این کار، پیام‌های چت زنده/تیکت چنین
     کاربری در دیتابیس ثبت می‌شد ولی چون ردیفی در users نداشت، سمت ادمین
     (هم مینی‌اپ و هم پنل وب) با خطای «کاربر یافت نشد» مواجه می‌شد."""
+    # ورود از سایت وب (فقط بات اصلی): نشست ساخته‌شده با تأیید در تلگرام، به‌جای initData.
+    if not x_init_data and x_web_token:
+        if tenant.tenant_id:
+            raise HTTPException(status_code=403, detail=tr("ورود از طریق سایت فقط برای بات اصلی فعال است."))
+        web_tg_id = web_auth.session_user(tenant.db, x_web_token)
+        if not web_tg_id:
+            raise HTTPException(status_code=401, detail=tr("نشست ورود منقضی شده است. دوباره وارد شوید."))
+        return web_tg_id, tenant.db, tenant
     result = validate_init_data(x_init_data, tenant.bot_token)
     if not result or "user" not in result:
         raise HTTPException(status_code=401, detail=tr("initData نامعتبر است."))
@@ -371,9 +402,14 @@ async def _force_join_check(tg_id: int, db: Database, tenant: "Tenant"):
 
 
 async def require_joined(auth=Depends(get_verified_user)):
-    """چک عضویت اجباری + قوانین قبل از اکشن‌های حساس مینی‌اپ."""
+    """چک عضویت اجباری + قوانین قبل از اکشن‌های حساس مینی‌اپ.
+
+    خریدار وب که ایمیلش را تأیید کرده، حساب تلگرام/عضویت کانال ندارد؛ برای او
+    فقط بررسی قوانین اعمال می‌شود. کاربران تلگرام و مینی‌اپ همچنان چک کامل دارند.
+    """
     tg_id, db, tenant = auth
-    await _force_join_check(tg_id, db, tenant)
+    if not (not tenant.tenant_id and web_auth.is_email_account(db, tg_id)):
+        await _force_join_check(tg_id, db, tenant)
     if not db.is_admin(tg_id):
         terms = db.get_terms_settings()
         if terms["enabled"] and not db.is_terms_accepted(tg_id):
@@ -2202,8 +2238,13 @@ def api_tier_quote(product_id: int, quantity: int = 1, auth=Depends(get_verified
 
 
 @app.post("/api/orders")
-async def api_create_order(body: OrderCreate, auth=Depends(require_joined)):
+async def api_create_order(body: OrderCreate, request: Request, auth=Depends(require_joined)):
     tg_id, db, tenant = auth
+    web_token = request.headers.get("x-web-token")
+    if web_token and not tenant.tenant_id:
+        await asyncio.to_thread(_verify_web_turnstile, request)
+        if not await asyncio.to_thread(web_auth.enforce_rate_limit, db, "web-order-ip:" + _client_ip(request), 20, 3600):
+            raise HTTPException(status_code=429, detail=tr("تعداد تلاش‌های خرید از این شبکه زیاد است؛ بعداً دوباره تلاش کنید."))
     user_row = db.get_user(tg_id)
     if user_row and user_row["is_blocked"]:
         raise HTTPException(status_code=403, detail=tr("حساب شما مسدود شده است."))
@@ -4300,10 +4341,11 @@ def api_topup_request(body: TopupCreate, auth=Depends(require_joined)):
 async def api_topup_receipt(
     topup_id: int = Form(...),
     photo: UploadFile = File(...),
-    x_init_data: str = Header(...),
+    x_init_data: Optional[str] = Header(None),
+    x_web_token: Optional[str] = Header(None),
     tenant: Tenant = Depends(get_tenant),
 ):
-    tg_id, db, tenant = get_verified_user(x_init_data, tenant)
+    tg_id, db, tenant = get_verified_user(x_init_data, tenant, x_web_token)
     topup = db.get_topup(topup_id)
     if not topup or topup["user_id"] != tg_id:
         raise HTTPException(status_code=404, detail=tr("درخواست شارژ یافت نشد."))
@@ -4374,10 +4416,11 @@ async def api_topup_receipt(
 async def api_order_receipt(
     order_id: int,
     photo: UploadFile = File(...),
-    x_init_data: str = Header(...),
+    x_init_data: Optional[str] = Header(None),
+    x_web_token: Optional[str] = Header(None),
     tenant: Tenant = Depends(get_tenant),
 ):
-    tg_id, db, tenant = get_verified_user(x_init_data, tenant)
+    tg_id, db, tenant = get_verified_user(x_init_data, tenant, x_web_token)
     order = db.get_order(order_id)
     if not order or order["user_id"] != tg_id:
         raise HTTPException(status_code=404, detail=tr("سفارش یافت نشد."))
@@ -7397,6 +7440,441 @@ async def api_admin_factory_reset(confirm_phrase: str = Form(""), auth=Depends(r
         f"بازگشت کامل به حالت کارخانه از طریق میان‌اپ؛ بکاپ ایمنی: "
         f"{os.path.basename(safety_backup) if safety_backup else 'ناموفق'}")
     return {"status": "ok", "safety_backup": os.path.basename(safety_backup) if safety_backup else None}
+
+
+# ---------------------------------------------------------------------------
+# سایت فروش وب (فقط بات اصلی): ورود با تلگرام + کاتالوگ عمومی
+# فرانت در پوشه‌ی web_store/ است و روی مسیر /store سرو می‌شود.
+# ---------------------------------------------------------------------------
+WEB_STORE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "web_store")
+
+
+def _web_main_only(tenant: Tenant):
+    if tenant.tenant_id:
+        raise HTTPException(status_code=404, detail=tr("این فروشگاه در دسترس نیست."))
+
+
+def _client_ip(request: Request) -> str:
+    """Use X-Forwarded-For only when request came from a local/private reverse proxy."""
+    peer = request.client.host if request.client else ""
+    try:
+        addr = ipaddress.ip_address(peer)
+        trusted_proxy = addr.is_loopback or addr.is_private or addr.is_link_local
+    except ValueError:
+        trusted_proxy = False
+    forwarded = request.headers.get("x-forwarded-for", "") if trusted_proxy else ""
+    return forwarded.split(",")[0].strip() or peer
+
+
+def _web_catalog_payload(db: Database) -> list:
+    categories = []
+    for c in db.get_categories(active_only=True):
+        products = []
+        for p in db.get_products(c["id"], active_only=True):
+            in_stock = bool(p["is_auto_provision"]) or db.count_available_configs(p["id"]) > 0
+            products.append({
+                "id": p["id"],
+                "name": p["name"],
+                "price": p["price"],
+                "original_price": compare_price_for(p) or None,
+                "description": p["description"],
+                "in_stock": in_stock,
+            })
+        if products:
+            categories.append({"id": c["id"], "name": c["name"], "products": products})
+    return categories
+
+
+@app.get("/api/web/catalog")
+async def api_web_catalog(tenant: Tenant = Depends(get_tenant)):
+    """کاتالوگ عمومی سایت (بدون ورود)."""
+    _web_main_only(tenant)
+    categories = await asyncio.to_thread(_web_catalog_payload, tenant.db)
+    username = await get_bot_username(tenant)
+    store_name = render_stored_setting("store_name", tenant.db.get_setting("store_name", "⚡ SHOP VPN"))
+    return {
+        "store_name": store_name,
+        "logo": tenant.db.get_setting("web_store_logo", ""),
+        "tagline": tenant.db.get_setting("web_store_tagline", ""),
+        "primary_color": tenant.db.get_setting("web_store_primary_color", ""),
+        "support_url": tenant.db.get_setting("web_store_support_url", ""),
+        "bot_url": f"https://t.me/{username}" if username else "",
+        "categories": categories,
+    }
+
+
+@app.post("/api/web/login/start")
+async def api_web_login_start(request: Request, tenant: Tenant = Depends(get_tenant)):
+    _web_main_only(tenant)
+    username = await get_bot_username(tenant)
+    if not username:
+        raise HTTPException(status_code=503, detail=tr("سرور موقتاً در دسترس نیست، دوباره تلاش کنید."))
+    if not await asyncio.to_thread(web_auth.enforce_rate_limit, tenant.db, "web-login-ip:" + _client_ip(request), 30, 3600):
+        raise HTTPException(status_code=429, detail=tr("تعداد درخواست‌ها زیاد است؛ چند دقیقه بعد دوباره تلاش کنید."))
+    try:
+        code, poll = await asyncio.to_thread(web_auth.start_login, tenant.db, _client_ip(request))
+    except ValueError:
+        raise HTTPException(status_code=429, detail=tr("تعداد درخواست‌ها زیاد است؛ چند دقیقه بعد دوباره تلاش کنید."))
+    return {
+        "link": f"https://t.me/{username}?start=weblogin_{code}",
+        "poll": poll,
+        "expires_in": web_auth.LOGIN_TTL,
+    }
+
+
+class WebLoginPoll(BaseModel):
+    poll: str
+
+
+def _verify_web_turnstile(request: Request) -> None:
+    """Verify Cloudflare Turnstile when configured; no-op for existing installs without keys."""
+    secret = os.getenv("SHOPVPN_TURNSTILE_SECRET_KEY", "").strip()
+    site_key = os.getenv("SHOPVPN_TURNSTILE_SITE_KEY", "").strip()
+    # Keep older deployments working when Turnstile is entirely disabled, but fail
+    # closed if only one half of the configuration is present.
+    if not secret and not site_key:
+        if os.getenv("SHOPVPN_WEB_ALLOW_NO_TURNSTILE", "").strip() == "1":
+            return
+        raise HTTPException(status_code=503, detail=tr("سرویس ورود و خرید از وب موقتاً فعال نیست."))
+    if not secret or not site_key:
+        raise HTTPException(status_code=503, detail=tr("تنظیمات بررسی امنیتی ناقص است؛ کلید عمومی و محرمانه را تنظیم کنید."))
+    token = request.headers.get("x-turnstile-token", "").strip()
+    if not token:
+        raise HTTPException(status_code=403, detail=tr("برای ادامه، بررسی امنیتی را کامل کنید."))
+    import urllib.parse
+    import urllib.request
+    payload = urllib.parse.urlencode({
+        "secret": secret,
+        "response": token,
+        "remoteip": _client_ip(request),
+    }).encode()
+    req = urllib.request.Request("https://challenges.cloudflare.com/turnstile/v0/siteverify", data=payload, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+        if not result.get("success"):
+            raise HTTPException(status_code=403, detail=tr("بررسی امنیتی ناموفق بود؛ دوباره تلاش کنید."))
+    except HTTPException:
+        raise
+    except Exception:
+        logging.getLogger("web_auth").warning("Turnstile verification unavailable", exc_info=True)
+        raise HTTPException(status_code=503, detail=tr("سرویس بررسی امنیتی موقتاً در دسترس نیست."))
+
+
+@app.get("/api/web/security-config")
+def api_web_security_config(tenant: Tenant = Depends(get_tenant)):
+    _web_main_only(tenant)
+    return {"turnstile_site_key": os.getenv("SHOPVPN_TURNSTILE_SITE_KEY", "").strip()}
+
+
+class WebMergeCode(BaseModel):
+    code: str = Field(default="", max_length=16)
+
+
+def _merge_http_error(exc: ValueError):
+    return HTTPException(status_code=400, detail=tr(web_auth.merge_reason_text(str(exc))))
+
+
+@app.post("/api/web/merge/code")
+async def api_web_merge_code(auth=Depends(get_verified_user)):
+    """کد ادغام از سمت سایت: در ربات با /merge CODE وارد می‌شود."""
+    tg_id, db, tenant = auth
+    _web_main_only(tenant)
+    if not web_auth.is_email_account(db, tg_id):
+        raise HTTPException(status_code=400, detail=tr("این گزینه فقط برای حساب ایمیلی است."))
+    try:
+        code = await asyncio.to_thread(web_auth.create_merge_code, db, "web", tg_id)
+    except ValueError as exc:
+        raise _merge_http_error(exc)
+    return {"code": code, "expires_in": web_auth.MERGE_CODE_TTL}
+
+
+@app.post("/api/web/merge/preview")
+async def api_web_merge_preview(body: WebMergeCode, request: Request, auth=Depends(get_verified_user)):
+    """کدی را که در ربات ساخته شده بررسی می‌کند و اطلاعات تأیید را برمی‌گرداند (بدون تغییر)."""
+    tg_id, db, tenant = auth
+    _web_main_only(tenant)
+    if not await asyncio.to_thread(web_auth.enforce_rate_limit, db, "merge-try:" + str(tg_id), web_auth.MERGE_TRIES_PER_HOUR, 3600):
+        raise HTTPException(status_code=429, detail=tr("تلاش‌های زیاد؛ بعداً دوباره امتحان کنید."))
+    try:
+        info = await asyncio.to_thread(web_auth.preview_merge, db, body.code, tg_id, "web")
+    except ValueError as exc:
+        raise _merge_http_error(exc)
+    return {"email": info["email"], "telegram": info["telegram"]}
+
+
+@app.post("/api/web/merge/confirm")
+async def api_web_merge_confirm(body: WebMergeCode, auth=Depends(get_verified_user)):
+    """ادغام نهایی حساب ایمیلی در حساب تلگرامِ کد. نشست فعلی باطل می‌شود."""
+    tg_id, db, tenant = auth
+    _web_main_only(tenant)
+    if not await asyncio.to_thread(web_auth.enforce_rate_limit, db, "merge-try:" + str(tg_id), web_auth.MERGE_TRIES_PER_HOUR, 3600):
+        raise HTTPException(status_code=429, detail=tr("تلاش‌های زیاد؛ بعداً دوباره امتحان کنید."))
+    try:
+        await asyncio.to_thread(web_auth.complete_merge, db, body.code, tg_id, "web")
+    except ValueError as exc:
+        raise _merge_http_error(exc)
+    return {"status": "ok"}
+
+
+class WebEmailStart(BaseModel):
+    email: str
+
+
+class WebEmailVerify(BaseModel):
+    email: str
+    code: str
+
+
+@app.post("/api/web/email/start")
+async def api_web_email_start(body: WebEmailStart, request: Request, tenant: Tenant = Depends(get_tenant)):
+    _web_main_only(tenant)
+    email = (body.email or "").strip().lower()
+    await asyncio.to_thread(_verify_web_turnstile, request)
+    ip = _client_ip(request)
+    if not await asyncio.to_thread(web_auth.enforce_rate_limit, tenant.db, "email-start-ip:" + ip, 5, 3600):
+        raise HTTPException(status_code=429, detail=tr("تعداد درخواست‌ها زیاد است؛ یک ساعت دیگر دوباره تلاش کنید."))
+    try:
+        code = await asyncio.to_thread(web_auth.start_email_login, tenant.db, email, ip)
+        await asyncio.to_thread(web_auth.send_email_code, email, code)
+    except ValueError as exc:
+        if str(exc) == "rate_limited":
+            raise HTTPException(status_code=429, detail=tr("برای این ایمیل کمی صبر کنید و دوباره تلاش کنید."))
+        raise HTTPException(status_code=400, detail=tr("ایمیل واردشده معتبر نیست."))
+    except RuntimeError:
+        raise HTTPException(status_code=503, detail=tr("ورود ایمیلی هنوز پیکربندی نشده است."))
+    except Exception:
+        logging.getLogger("web_auth").exception("Could not send web email verification")
+        raise HTTPException(status_code=502, detail=tr("ارسال ایمیل ناموفق بود؛ چند دقیقه دیگر دوباره تلاش کنید."))
+    return {"status": "sent", "expires_in": web_auth.LOGIN_TTL}
+
+
+@app.post("/api/web/email/verify")
+async def api_web_email_verify(body: WebEmailVerify, request: Request, tenant: Tenant = Depends(get_tenant)):
+    _web_main_only(tenant)
+    await asyncio.to_thread(_verify_web_turnstile, request)
+    ip = _client_ip(request)
+    if not await asyncio.to_thread(web_auth.enforce_rate_limit, tenant.db, "email-verify-ip:" + ip, 15, 900):
+        raise HTTPException(status_code=429, detail=tr("تلاش‌های زیادی انجام شده؛ ۱۵ دقیقه دیگر دوباره تلاش کنید."))
+    token, tg_id = await asyncio.to_thread(web_auth.verify_email_code, tenant.db, body.email, body.code, ip)
+    if not token:
+        raise HTTPException(status_code=400, detail=tr("کد نامعتبر یا منقضی شده است."))
+    email = body.email.strip().lower()
+    if await asyncio.to_thread(web_auth.is_email_account, tenant.db, tg_id):
+        await asyncio.to_thread(tenant.db.add_or_update_user, tg_id, "", email)
+    user = await asyncio.to_thread(tenant.db.get_user, tg_id)
+    return {"status": "ok", "token": token, "user": {"first_name": (user["first_name"] if user else email), "username": (user["username"] if user else ""), "is_email_account": await asyncio.to_thread(web_auth.is_email_account, tenant.db, tg_id)}}
+
+
+@app.post("/api/web/login/poll")
+async def api_web_login_poll(body: WebLoginPoll, request: Request, tenant: Tenant = Depends(get_tenant)):
+    _web_main_only(tenant)
+    status, token, tg_id = await asyncio.to_thread(web_auth.poll_login, tenant.db, body.poll, _client_ip(request))
+    if status != "ok":
+        return {"status": status}
+    user = tenant.db.get_user(tg_id)
+    return {
+        "status": "ok",
+        "token": token,
+        "user": {"first_name": user["first_name"] if user else "", "username": user["username"] if user else ""},
+    }
+
+
+@app.get("/api/web/session")
+def api_web_session(auth=Depends(get_verified_user)):
+    tg_id, db, _ = auth
+    user = db.get_user(tg_id)
+    return {"first_name": user["first_name"] if user else "", "username": user["username"] if user else "", "is_email_account": web_auth.is_email_account(db, tg_id)}
+
+
+@app.post("/api/web/logout")
+def api_web_logout(x_web_token: Optional[str] = Header(None), tenant: Tenant = Depends(get_tenant)):
+    _web_main_only(tenant)
+    if x_web_token:
+        web_auth.logout(tenant.db, x_web_token)
+    return {"status": "ok"}
+
+
+def _web_services(db: Database, tg_id: int) -> list:
+    """سرویس‌های فعال کاربر برای داشبورد: کانفیگ‌های ساخته‌شده روی پنل + کانفیگ‌های بانک."""
+    out, panel_order_ids = [], set()
+    for c in db.get_custom_configs_for_user(tg_id):
+        if c["order_id"]:
+            panel_order_ids.add(c["order_id"])
+        if not c["subscription_url"]:
+            continue
+        is_test = c["source"] == "test"
+        out.append({
+            "key": f"c{c['id']}", "kind": "custom", "id": c["id"],
+            "name": c["display_name"] or c["username"],
+            "volume_gb": c["volume_gb"], "duration_days": c["duration_days"],
+            "link": c["subscription_url"], "expires_at": c["expires_at"],
+            "is_test": is_test,
+            "enabled": (c["enabled"] if "enabled" in c.keys() else 1) == 1,
+            "can_renew": not is_test,
+        })
+    for o in db.get_user_orders(tg_id):
+        if o["status"] != "approved" or o["is_renewal"] or o["is_custom_config"] or o["id"] in panel_order_ids:
+            continue
+        product = db.get_product(o["product_id"]) if o["product_id"] else None
+        cfgs = list(db.get_order_configs(o["id"]) or [])
+        if not cfgs and o["config_id"]:
+            cfg = db.get_config_by_id(o["config_id"])
+            cfgs = [cfg] if cfg else []
+        for c in cfgs:
+            if (("is_disabled" in c.keys()) and c["is_disabled"]) or not c["link"]:
+                continue
+            out.append({
+                "key": f"b{c['id']}", "kind": "bank", "id": c["id"],
+                "name": product["name"] if product else "",
+                "volume_gb": None, "duration_days": None,
+                "link": c["link"], "expires_at": c["expires_at"],
+                "is_test": False, "enabled": True, "can_renew": False,
+            })
+    return out
+
+
+@app.get("/api/web/services")
+def api_web_services(auth=Depends(get_verified_user)):
+    tg_id, db, _ = auth
+    return {
+        "renew_enabled": db.get_setting("svc_show_renew_full", "1") == "1",
+        "services": _web_services(db, tg_id),
+    }
+
+
+@app.get("/api/web/qr")
+def api_web_qr(link: str = Query(..., max_length=2000), auth=Depends(get_verified_user)):
+    """QR لینک یکی از سرویس‌های خود کاربر (برای لینک دیگران ساخته نمی‌شود)."""
+    tg_id, db, _ = auth
+    if not any(s["link"] == link for s in _web_services(db, tg_id)):
+        raise HTTPException(status_code=404, detail=tr("کانفیگ یافت نشد یا متعلق به شما نیست."))
+    return _qr_svg_response(link)
+
+
+def _qr_svg_response(data: str):
+    try:
+        import io
+        import qrcode
+        import qrcode.image.svg
+    except ImportError:
+        raise HTTPException(status_code=501, detail=tr("سرور موقتاً در دسترس نیست، دوباره تلاش کنید."))
+    img = qrcode.make(data, image_factory=qrcode.image.svg.SvgPathImage, box_size=10, border=2)
+    buf = io.BytesIO()
+    img.save(buf)
+    return Response(buf.getvalue(), media_type="image/svg+xml", headers={"Cache-Control": "private, no-store"})
+
+
+def _web_order_view(db: Database, tg_id: int, order_id: int):
+    """وضعیت یک سفارش و لینک‌های تحویل آن (هم بانک کانفیگ، هم محصول ساخت خودکار روی پنل)."""
+    order = db.get_order(order_id)
+    if not order or order["user_id"] != tg_id:
+        return None
+    product = db.get_product(order["product_id"]) if order["product_id"] else None
+    links, expires_at = [], None
+    if order["status"] == "approved":
+        customs = [c for c in db.get_custom_configs_for_user(tg_id) if c["order_id"] == order_id]
+        if customs:
+            links = [c["subscription_url"] for c in customs if c["subscription_url"]]
+            expires_at = customs[0]["expires_at"]
+        else:
+            cfgs = list(db.get_order_configs(order_id) or [])
+            if not cfgs and order["config_id"]:
+                cfg = db.get_config_by_id(order["config_id"])
+                cfgs = [cfg] if cfg else []
+            cfgs = [c for c in cfgs if not (("is_disabled" in c.keys()) and c["is_disabled"])]
+            links = [c["link"] for c in cfgs if c["link"]]
+            expires_at = cfgs[0]["expires_at"] if cfgs else None
+    return {
+        "order_id": order_id,
+        "status": order["status"],
+        "product_name": product["name"] if product else "",
+        "quantity": order["quantity"] or 1,
+        "final_price": order["final_price"],
+        "links": links,
+        "expires_at": expires_at,
+    }
+
+
+@app.get("/api/web/orders/{order_id}")
+def api_web_order(order_id: int, auth=Depends(get_verified_user)):
+    tg_id, db, _ = auth
+    view = _web_order_view(db, tg_id, order_id)
+    if not view:
+        raise HTTPException(status_code=404, detail=tr("سفارش یافت نشد."))
+    return view
+
+
+@app.get("/api/web/orders/{order_id}/qr/{index}")
+def api_web_order_qr(order_id: int, index: int, auth=Depends(get_verified_user)):
+    """QR لینک تحویل (ساخت روی سرور خودت؛ لینک اشتراک به هیچ سرویس بیرونی نمی‌رود)."""
+    tg_id, db, _ = auth
+    view = _web_order_view(db, tg_id, order_id)
+    if not view or not (0 <= index < len(view["links"])):
+        raise HTTPException(status_code=404, detail=tr("سفارش یافت نشد."))
+    return _qr_svg_response(view["links"][index])
+
+
+def _seo_base(request: Request) -> str:
+    configured = os.getenv("SHOPVPN_SEO_SITE_URL", "").strip().rstrip("/")
+    if configured:
+        return configured
+    proto = request.headers.get("x-forwarded-proto", "").split(",")[0].strip() or request.url.scheme
+    host = request.headers.get("x-forwarded-host", "").split(",")[0].strip() or request.headers.get("host", "")
+    return f"{proto}://{host}".rstrip("/")
+
+
+@app.get("/robots.txt", include_in_schema=False)
+def seo_robots(request: Request):
+    base = _seo_base(request)
+    body = (
+        "User-agent: *\n"
+        "Allow: /store/\n"
+        "Allow: /store/en/\n"
+        "Disallow: /api/\n"
+        "Disallow: /admin/\n"
+        f"Sitemap: {base}/sitemap.xml\n"
+    )
+    return Response(content=body, media_type="text/plain; charset=utf-8", headers={"Cache-Control": "public, max-age=3600"})
+
+
+@app.get("/sitemap.xml", include_in_schema=False)
+def seo_sitemap(request: Request):
+    # Configure SHOPVPN_SEO_SITE_URL to the canonical public HTTPS origin behind a proxy.
+    base = _seo_base(request)
+    paths = [
+        ("/store/", "weekly", "1.0"),
+        ("/store/faq.html", "monthly", "0.7"),
+        ("/store/connection-guide.html", "monthly", "0.7"),
+        ("/store/en/", "weekly", "0.9"),
+        ("/store/en/faq.html", "monthly", "0.7"),
+        ("/store/en/connection-guide.html", "monthly", "0.7"),
+        ("/store/terms.html", "monthly", "0.5"),
+        ("/store/en/terms.html", "monthly", "0.5"),
+    ]
+    alt = {"/store/": "/store/en/", "/store/en/": "/store/", "/store/faq.html": "/store/en/faq.html",
+           "/store/en/faq.html": "/store/faq.html", "/store/connection-guide.html": "/store/en/connection-guide.html",
+           "/store/en/connection-guide.html": "/store/connection-guide.html",
+           "/store/terms.html": "/store/en/terms.html", "/store/en/terms.html": "/store/terms.html"}
+    def _links(path):
+        if path not in alt:
+            return ""
+        other = alt[path]
+        fa_path, en_path = (path, other) if not path.startswith("/store/en/") else (other, path)
+        return ("<xhtml:link rel=\"alternate\" hreflang=\"fa\" href=\"" + html_lib.escape(base + fa_path) + "\"/>"
+                + "<xhtml:link rel=\"alternate\" hreflang=\"en\" href=\"" + html_lib.escape(base + en_path) + "\"/>")
+    urls = "".join(
+        "<url><loc>" + html_lib.escape(base + path) + "</loc>" + _links(path) + "<changefreq>" + freq
+        + "</changefreq><priority>" + priority + "</priority></url>"
+        for path, freq, priority in paths
+    )
+    xml = ('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" '
+           'xmlns:xhtml="http://www.w3.org/1999/xhtml">' + urls + '</urlset>')
+    return Response(content=xml, media_type="application/xml; charset=utf-8", headers={"Cache-Control": "public, max-age=3600"})
+
+
+if os.path.isdir(WEB_STORE_DIR):
+    app.mount("/store", NoCacheStaticFiles(directory=WEB_STORE_DIR, html=True), name="web_store")
 
 
 app.mount("/", NoCacheStaticFiles(directory=STATIC_DIR, html=True), name="static")
