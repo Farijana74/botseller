@@ -709,6 +709,10 @@ class AddServiceFlow(StatesGroup):
     waiting_input = State()
 
 
+class MergeFlow(StatesGroup):
+    waiting_code = State()
+
+
 class RenewalFlow(StatesGroup):
     waiting_amount = State()
     waiting_receipt = State()
@@ -782,6 +786,11 @@ class AdminSettingInput(StatesGroup):
     waiting_value = State()
     waiting_prizes = State()
     waiting_report_chat = State()
+
+
+class AdminDSubInput(StatesGroup):
+    waiting_value = State()
+    waiting_app = State()
 
 
 class AdminAIChat(StatesGroup):

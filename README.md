@@ -805,6 +805,17 @@ Beyond answering questions, the assistant can prepare account actions that the b
 
 <a id="contributing"></a>
 
+## 🔗 Dedicated Subscription Server
+
+Subscription links are served from your own domain (the panel address is never exposed). Opened in a browser, a link shows a web page (black-and-white design with light/dark mode) with usage, expiry, a usage chart, configs, QR codes, an "Add to app" button and app lists for iOS / Android / Windows / macOS / Linux; VPN apps receive the same link as a normal subscription.
+
+- **First-time setup (only from `manage.sh`)**: option 37 (domain, nginx, SSL, `v2raybot-sub` service on port 8004, saves `DEDICATED_SUB_URL`), 38 on/off, 39 update, 40 remove. Point the domain's A record to the server first.
+- **Everything else is configured in the Telegram bot**: Admin panel → Products & configs → Dedicated sub — on/off (no restart), page look (sections, brand, logo, notice, support, footer, theme), sub output (profile title, update interval, "first line" with remaining volume/days, placeholder config for expired/exhausted services), apps (hide/show, recommended, custom apps), FAQ, stats and access log.
+- Turning it off keeps already-issued links working (plain pass-through) while new links use the panel address again.
+- `/sub/smart/<token>` (`/smartsub`) is also served by this server and merges several subscriptions into one link.
+- Code: `dedicated_sub.py` (core), `sub_server/` (server + web page), `admin_dedicated_sub.py` (bot menu), `db/dedicated_sub.py`; tests: `python -m unittest test_dedicated_sub`.
+- The output format (Clash / sing-box / v2ray) is chosen by the panel from the app's User-Agent, which the sub server forwards. The "first line" and placeholder config apply only to link-list subscriptions (vless/vmess/...).
+
 ## 🤝 Contributing & License
 
 <details>

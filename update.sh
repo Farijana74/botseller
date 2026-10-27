@@ -25,6 +25,10 @@ echo "   برای نصب/آپدیت اختیاری ترجمه از منوی مد
 
 echo "🔄 ری‌استارت سرویس بات..."
 sudo systemctl restart "$SERVICE_NAME"
+if [ -f "/etc/systemd/system/${SERVICE_NAME}-sub.service" ]; then
+    echo "🔗 ری‌استارت سرور ساب اختصاصی..."
+    sudo systemctl restart "${SERVICE_NAME}-sub"
+fi
 sleep 2
 
 echo "✅ انجام شد."
