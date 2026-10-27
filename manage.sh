@@ -1800,9 +1800,9 @@ EOF
 
     echo -e "${CYAN}$(t saving_miniapp_url)${RESET}"
     if grep -q "^MINIAPP_URL=" "$INSTALL_DIR/.env" 2>/dev/null; then
-        sed -i "s|^MINIAPP_URL=.*|MINIAPP_URL=https://$DOMAIN|" "$INSTALL_DIR/.env"
+        sed -i "s|^MINIAPP_URL=.*|MINIAPP_URL=https://$DOMAIN/?app=1|" "$INSTALL_DIR/.env"
     else
-        echo "MINIAPP_URL=https://$DOMAIN" >> "$INSTALL_DIR/.env"
+        echo "MINIAPP_URL=https://$DOMAIN/?app=1" >> "$INSTALL_DIR/.env"
     fi
 
     sudo systemctl restart "$SERVICE_NAME"
@@ -2253,7 +2253,7 @@ list_service_domains() {
     local miniapp_domain="" admin_domain=""
 
     if [ -f "$ENV_FILE" ]; then
-        miniapp_domain=$(grep -m1 "^MINIAPP_URL=" "$ENV_FILE" | cut -d= -f2- | sed -E 's#^https?://##; s#/+$##')
+        miniapp_domain=$(grep -m1 "^MINIAPP_URL=" "$ENV_FILE" | cut -d= -f2- | sed -E 's#^https?://##; s#[/?].*$##')
         admin_domain=$(grep -m1 "^ADMIN_PANEL_URL=" "$ENV_FILE" | cut -d= -f2- | sed -E 's#^https?://##; s#/+$##')
     fi
 
@@ -3209,6 +3209,18 @@ server {
     listen 80;
     server_name $DOMAIN;
     client_max_body_size 20m;
+    # ریشه‌ی دامنه = فروشگاه وب. مینی‌اپ فقط با ?app=1 باز می‌شود (دکمه‌ی منوی بات تلگرام).
+    location = / {
+        if (\$arg_app != "1") {
+            return 302 /store/;
+        }
+        proxy_pass http://127.0.0.1:8001;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
     location / {
         proxy_pass http://127.0.0.1:8001;
         proxy_http_version 1.1;
@@ -3228,6 +3240,9 @@ EOF
     else
         sudo certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos --register-unsafely-without-email --redirect || return 1
     fi
+    # آدرس مینی‌اپ بات = ریشه با ?app=1 (تا ریشه‌ی دامنه فروشگاه بماند)
+    set_env_key MINIAPP_URL "https://$DOMAIN/?app=1"
+    sudo systemctl restart "$SERVICE_NAME" >/dev/null 2>&1 || true
     echo -e "${GREEN}${BOLD}$(t ws_ready "$DOMAIN")${RESET}"
     echo -e "${DIM}$(t ws_ports_hint)${RESET}"
 }

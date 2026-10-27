@@ -4431,7 +4431,11 @@ def create_admin_router(db, is_main_bot: bool = True, bot_manager=None) -> Route
         if not full_admin_only(call.from_user.id):
             return await deny_support(call)
         token = (await asyncio.to_thread(db.get_setting, "card_to_card_sms_webhook_token", ""))
-        base_url = os.environ.get("MINIAPP_URL") or os.environ.get("API_BASE_URL") or ""
+        from urllib.parse import urlsplit
+        _raw_base = os.environ.get("MINIAPP_URL") or os.environ.get("API_BASE_URL") or ""
+        # MINIAPP_URL ممکن است ?app=1 داشته باشد؛ برای ساخت مسیر API فقط اسکیم+هاست لازم است.
+        _parts = urlsplit(_raw_base) if _raw_base else None
+        base_url = f"{_parts.scheme}://{_parts.netloc}" if _parts and _parts.netloc else ""
         webhook_url = f"{base_url}/api/webhooks/sms-forwarder" if base_url else None
         text = (
             "📡 اتصال اپ BankSmsForwarder:\n\n"
