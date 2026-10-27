@@ -16,6 +16,10 @@ export DEBIAN_FRONTEND=noninteractive
 export NEEDRESTART_MODE=a
 export NEEDRESTART_SUSPEND=1
 
+# L <persian> <english>: prints the text in the language chosen in manage.sh
+# (SHOPVPN_UI_LANG; default fa when install.sh is run on its own)
+L() { if [ "${SHOPVPN_UI_LANG:-fa}" = "fa" ]; then printf '%s' "$1"; else printf '%s' "$2"; fi; }
+
 
 # ----------------------------------------------------------------------------
 # رابط پیشرفت زنده: مراحل، درصد، زمان سپری‌شده و پیام‌های دوستانه
@@ -105,15 +109,15 @@ REPO_URL="https://github.com/mehdirafatpanah/Shopvpn.git"
 INSTALL_DIR="$HOME/v2ray_bot"
 SERVICE_NAME="v2raybot"
 
-echo "🚀 شروع نصب/آپدیت بات فروش کانفیگ V2Ray"
+echo "$(L "🚀 شروع نصب/آپدیت بات فروش کانفیگ V2Ray" "🚀 Starting install/update of the V2Ray config sales bot")"
 echo "──────────────────────────────────────────"
-echo "نمایش پیشرفت زنده فعال است؛ اگر یک مرحله طول کشید، ترمینال هنگ نکرده است."
+echo "$(L "نمایش پیشرفت زنده فعال است؛ اگر یک مرحله طول کشید، ترمینال هنگ نکرده است." "Live progress is on; if a step takes a while, the terminal has not frozen.")"
 echo ""
 
 TOTAL_STEPS=6
 
 # ۱. پیش‌نیازها
-run_stage 1 "$TOTAL_STEPS" "📦 نصب پیش‌نیازهای سیستم" bash -c   "sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a NEEDRESTART_SUSPEND=1 apt-get update -qq && timeout 120 sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a NEEDRESTART_SUSPEND=1 apt-get install -y -qq git python3 python3-pip python3-venv ca-certificates curl >/dev/null"
+run_stage 1 "$TOTAL_STEPS" "$(L "📦 نصب پیش‌نیازهای سیستم" "📦 Installing system prerequisites")" bash -c   "sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a NEEDRESTART_SUSPEND=1 apt-get update -qq && timeout 120 sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a NEEDRESTART_SUSPEND=1 apt-get install -y -qq git python3 python3-pip python3-venv ca-certificates curl >/dev/null"
 
 # ----------------------------------------------------------------------------
 # ۲. دریافت یا آپدیت کد از گیت‌هاب
@@ -132,10 +136,10 @@ export GIT_TERMINAL_PROMPT=0
 fetch_project_code() {
     local ok=0
     if [ -d "$INSTALL_DIR/.git" ]; then
-        echo "🔄 مخزن از قبل موجود است، در حال دریافت آخرین تغییرات..."
+        echo "$(L "🔄 مخزن از قبل موجود است، در حال دریافت آخرین تغییرات..." "🔄 Repository already exists, fetching the latest changes...")"
         if git -C "$INSTALL_DIR" pull --quiet; then ok=1; fi
     else
-        echo "📥 دریافت پروژه از گیت‌هاب..."
+        echo "$(L "📥 دریافت پروژه از گیت‌هاب..." "📥 Downloading the project from GitHub...")"
         if git clone --quiet "$REPO_URL" "$INSTALL_DIR"; then ok=1; fi
     fi
 
@@ -143,12 +147,12 @@ fetch_project_code() {
         return 0
     fi
 
-    echo "⚠️ دسترسی git مسدود شد، در حال دریافت از طریق آرشیو مستقیم..."
+    echo "$(L "⚠️ دسترسی git مسدود شد، در حال دریافت از طریق آرشیو مستقیم..." "⚠️ git access was blocked, downloading via the direct archive...")"
     local tmp_tar tmp_dir
     tmp_tar=$(mktemp)
     tmp_dir=$(mktemp -d)
     if ! curl -fsSL "https://codeload.github.com/${GITHUB_OWNER}/${GITHUB_REPO}/tar.gz/refs/heads/${GITHUB_BRANCH}" -o "$tmp_tar"; then
-        echo "❌ دانلود آرشیو پروژه هم ناموفق بود. اتصال اینترنت سرور را بررسی کن."
+        echo "$(L "❌ دانلود آرشیو پروژه هم ناموفق بود. اتصال اینترنت سرور را بررسی کن." "❌ Downloading the project archive failed too. Check the server internet connection.")"
         rm -f "$tmp_tar"; rm -rf "$tmp_dir"
         return 1
     fi
@@ -166,13 +170,13 @@ fetch_project_code() {
     return 0
 }
 
-run_stage 2 "$TOTAL_STEPS" "📥 دریافت/آپدیت پروژه از GitHub" fetch_project_code
+run_stage 2 "$TOTAL_STEPS" "$(L "📥 دریافت/آپدیت پروژه از GitHub" "📥 Fetching/updating the project from GitHub")" fetch_project_code
 cd "$INSTALL_DIR"
 
 # ----------------------------------------------------------------------------
 # ۳. ساخت virtual environment و نصب پکیج‌ها
 # ----------------------------------------------------------------------------
-run_stage 3 "$TOTAL_STEPS" "🐍 آماده‌سازی Python و نصب پکیج‌ها" bash -c '
+run_stage 3 "$TOTAL_STEPS" "$(L "🐍 آماده‌سازی Python و نصب پکیج‌ها" "🐍 Preparing Python and installing packages")" bash -c '
     if [ ! -d "venv" ]; then python3 -m venv venv; fi
     source venv/bin/activate
     pip install -r requirements.txt --quiet
@@ -183,35 +187,35 @@ run_stage 3 "$TOTAL_STEPS" "🐍 آماده‌سازی Python و نصب پکیج
 # ۴. تنظیم فایل .env (فقط دفعه اول، چون این فایل هیچ‌وقت در گیت نیست)
 # ----------------------------------------------------------------------------
 echo ""
-echo "  [مرحله ۴/$TOTAL_STEPS] 🔑 تنظیم اطلاعات بات"
+echo "$(L "  [مرحله ۴/$TOTAL_STEPS] 🔑 تنظیم اطلاعات بات" "  [Step 4/$TOTAL_STEPS] 🔑 Bot settings")"
 if [ ! -f "$INSTALL_DIR/.env" ]; then
     echo ""
-    echo "🔑 فایل .env پیدا نشد. اطلاعات زیر را وارد کن:"
-    read -rp "توکن بات (از BotFather): " BOT_TOKEN_INPUT
-    read -rp "آیدی عددی ادمین (مثلاً از @userinfobot): " OWNER_ID_INPUT
+    echo "$(L "🔑 فایل .env پیدا نشد. اطلاعات زیر را وارد کن:" "🔑 The .env file was not found. Enter the following:")"
+    read -rp "$(L "توکن بات (از BotFather): " "Bot token (from BotFather): ")" BOT_TOKEN_INPUT
+    read -rp "$(L "آیدی عددی ادمین (مثلاً از @userinfobot): " "Admin numeric ID (e.g. from @userinfobot): ")" OWNER_ID_INPUT
     cat > "$INSTALL_DIR/.env" <<EOF
 BOT_TOKEN=$BOT_TOKEN_INPUT
 OWNER_ID=$OWNER_ID_INPUT
 EOF
 
     echo ""
-    echo "بات چطور آپدیت‌های تلگرام را دریافت کند؟"
-    echo "  1) Polling  (پیش‌فرض - ساده‌تر، نیاز به دامنه/SSL ندارد)"
-    echo "  2) Webhook  (نیاز به یک دامنه که DNS آن روی IP همین سرور تنظیم شده)"
-    read -rp "انتخاب [1]: " BOT_MODE_CHOICE
+    echo "$(L "بات چطور آپدیت‌های تلگرام را دریافت کند؟" "How should the bot receive Telegram updates?")"
+    echo "$(L "  1) Polling  (پیش‌فرض - ساده‌تر، نیاز به دامنه/SSL ندارد)" "  1) Polling  (default - simpler, no domain/SSL needed)")"
+    echo "$(L "  2) Webhook  (نیاز به یک دامنه که DNS آن روی IP همین سرور تنظیم شده)" "  2) Webhook  (needs a domain whose DNS points to this server IP)")"
+    read -rp "$(L "انتخاب [1]: " "Choice [1]: ")" BOT_MODE_CHOICE
     BOT_MODE_CHOICE="${BOT_MODE_CHOICE:-1}"
 
     if [ "$BOT_MODE_CHOICE" = "2" ]; then
-        read -rp "دامنه‌ای که برای وب‌هوک بات استفاده می‌کنی (مثلاً bot.example.com): " WEBHOOK_DOMAIN
+        read -rp "$(L "دامنه‌ای که برای وب‌هوک بات استفاده می‌کنی (مثلاً bot.example.com): " "Domain to use for the bot webhook (e.g. bot.example.com): ")" WEBHOOK_DOMAIN
         if [ -z "$WEBHOOK_DOMAIN" ]; then
-            echo "⚠️ دامنه وارد نشد؛ بات با Polling راه‌اندازی می‌شود (بعداً از منوی manage.sh می‌توانی وب‌هوک را فعال کنی)."
+            echo "$(L "⚠️ دامنه وارد نشد؛ بات با Polling راه‌اندازی می‌شود (بعداً از منوی manage.sh می‌توانی وب‌هوک را فعال کنی)." "⚠️ No domain entered; the bot will start with Polling (you can enable the webhook later from the manage.sh menu).")"
         else
             WEBHOOK_PORT=8010
-            echo "📦 نصب nginx و certbot..."
+            echo "$(L "📦 نصب nginx و certbot..." "📦 Installing nginx and certbot...")"
             sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a NEEDRESTART_SUSPEND=1 \
                 apt-get install -y -qq nginx certbot python3-certbot-nginx > /dev/null
 
-            echo "🌐 تنظیم nginx برای $WEBHOOK_DOMAIN..."
+            echo "$(L "🌐 تنظیم nginx برای $WEBHOOK_DOMAIN..." "🌐 Configuring nginx for $WEBHOOK_DOMAIN...")"
             sudo bash -c "cat > /etc/nginx/sites-available/${WEBHOOK_DOMAIN}.conf" <<NGXEOF
 server {
     listen 80;
@@ -232,10 +236,10 @@ NGXEOF
             sudo ln -sf "/etc/nginx/sites-available/${WEBHOOK_DOMAIN}.conf" "/etc/nginx/sites-enabled/${WEBHOOK_DOMAIN}.conf"
 
             if ! sudo nginx -t > /dev/null 2>&1; then
-                echo "⛔️ کانفیگ nginx خطا دارد؛ بات با Polling راه‌اندازی می‌شود."
+                echo "$(L "⛔️ کانفیگ nginx خطا دارد؛ بات با Polling راه‌اندازی می‌شود." "⛔️ The nginx config has an error; the bot will start with Polling.")"
             else
                 sudo systemctl reload nginx
-                echo "🔐 دریافت گواهی SSL (Let's Encrypt)..."
+                echo "$(L "🔐 دریافت گواهی SSL (Let's Encrypt)..." "🔐 Getting an SSL certificate (Let's Encrypt)...")"
                 if sudo certbot --nginx -d "$WEBHOOK_DOMAIN" --non-interactive --agree-tos \
                     --register-unsafely-without-email --redirect; then
                     WEBHOOK_SECRET_VAL=$(python3 -c "import secrets; print(secrets.token_hex(24))")
@@ -246,16 +250,16 @@ WEBHOOK_SECRET=$WEBHOOK_SECRET_VAL
 WEBHOOK_LISTEN_HOST=127.0.0.1
 WEBHOOK_LISTEN_PORT=$WEBHOOK_PORT
 EOF
-                    echo "✅ حالت Webhook تنظیم شد: https://$WEBHOOK_DOMAIN"
+                    echo "$(L "✅ حالت Webhook تنظیم شد: https://$WEBHOOK_DOMAIN" "✅ Webhook mode is set: https://$WEBHOOK_DOMAIN")"
                 else
-                    echo "⛔️ دریافت SSL ناموفق بود؛ بات با Polling راه‌اندازی می‌شود (بعداً از منوی manage.sh دوباره امتحان کن)."
+                    echo "$(L "⛔️ دریافت SSL ناموفق بود؛ بات با Polling راه‌اندازی می‌شود (بعداً از منوی manage.sh دوباره امتحان کن)." "⛔️ Getting SSL failed; the bot will start with Polling (try again later from the manage.sh menu).")"
                 fi
             fi
         fi
     fi
-    echo "✅ فایل .env ساخته شد."
+    echo "$(L "✅ فایل .env ساخته شد." "✅ The .env file was created.")"
 else
-    echo "✅ فایل .env از قبل موجود است، دست‌نخورده باقی می‌ماند."
+    echo "$(L "✅ فایل .env از قبل موجود است، دست‌نخورده باقی می‌ماند." "✅ The .env file already exists and is left untouched.")"
 fi
 
 # ----------------------------------------------------------------------------
@@ -263,11 +267,11 @@ fi
 #    کاربر نباید هیچ مدل Argos یا LibreTranslate را دستی نصب کند.
 # ----------------------------------------------------------------------------
 bash "$INSTALL_DIR/setup_local_translation.sh" --ask || true
-run_stage 5 "$TOTAL_STEPS" "🌍 نصب موتور ترجمه و مدل‌های زبان" bash -c "bash '$INSTALL_DIR/setup_local_translation.sh'" ||     echo "⚠️ نصب موتور ترجمه کامل نشد؛ بات ادامه می‌دهد و در آپدیت بعدی دوباره تلاش می‌کند."
+run_stage 5 "$TOTAL_STEPS" "$(L "🌍 نصب موتور ترجمه و مدل‌های زبان" "🌍 Installing the translation engine and language models")" bash -c "bash '$INSTALL_DIR/setup_local_translation.sh'" ||     echo "$(L "⚠️ نصب موتور ترجمه کامل نشد؛ بات ادامه می‌دهد و در آپدیت بعدی دوباره تلاش می‌کند." "⚠️ The translation engine was not fully installed; the bot continues and will retry on the next update.")"
 
 # ۶. ساخت و راه‌اندازی systemd
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
-run_stage 6 "$TOTAL_STEPS" "⚙️ ساخت و راه‌اندازی سرویس دائمی" bash -c "
+run_stage 6 "$TOTAL_STEPS" "$(L "⚙️ ساخت و راه‌اندازی سرویس دائمی" "⚙️ Creating and starting the permanent service")" bash -c "
 sudo bash -c 'cat > "$SERVICE_FILE"' <<EOF
 [Unit]
 Description=V2Ray Telegram Sales Bot
@@ -293,20 +297,20 @@ sleep 2
 echo ""
 echo "──────────────────────────────────────────"
 if sudo systemctl is-active --quiet "$SERVICE_NAME"; then
-    echo "✅ بات با موفقیت نصب/آپدیت شد و در حال اجراست."
+    echo "$(L "✅ بات با موفقیت نصب/آپدیت شد و در حال اجراست." "✅ The bot was installed/updated successfully and is running.")"
 else
-    echo "⚠️ بات اجرا نشد. برای دیدن جزئیات خطا:"
+    echo "$(L "⚠️ بات اجرا نشد. برای دیدن جزئیات خطا:" "⚠️ The bot did not start. To see the error details:")"
     echo "   sudo journalctl -u $SERVICE_NAME -n 50 --no-pager"
 fi
 sudo bash -c "printf '#!/bin/bash\nif [ \"\$(id -u)\" -ne 0 ] && command -v sudo >/dev/null 2>&1; then\n    exec sudo env HOME=\"%s\" bash \"%s/manage.sh\" \"\$@\"\nfi\nexec bash \"%s/manage.sh\" \"\$@\"\n' '$HOME' '$INSTALL_DIR' '$INSTALL_DIR' > /usr/local/bin/shopvpn && chmod 755 /usr/local/bin/shopvpn" 2>/dev/null || true
 
 echo ""
-echo "پنل مدیریت:   shopvpn"
-echo "دستورات مفید:"
-echo "  وضعیت بات:    sudo systemctl status $SERVICE_NAME"
-echo "  لاگ زنده:      sudo journalctl -u $SERVICE_NAME -f"
-echo "  ری‌استارت:     sudo systemctl restart $SERVICE_NAME"
-echo "  متوقف کردن:    sudo systemctl stop $SERVICE_NAME"
+echo "$(L "پنل مدیریت:   shopvpn" "Management panel:   shopvpn")"
+echo "$(L "دستورات مفید:" "Useful commands:")"
+echo "$(L "  وضعیت بات:    sudo systemctl status $SERVICE_NAME" "  Bot status:   sudo systemctl status $SERVICE_NAME")"
+echo "$(L "  لاگ زنده:      sudo journalctl -u $SERVICE_NAME -f" "  Live logs:     sudo journalctl -u $SERVICE_NAME -f")"
+echo "$(L "  ری‌استارت:     sudo systemctl restart $SERVICE_NAME" "  Restart:       sudo systemctl restart $SERVICE_NAME")"
+echo "$(L "  متوقف کردن:    sudo systemctl stop $SERVICE_NAME" "  Stop:          sudo systemctl stop $SERVICE_NAME")"
 echo "──────────────────────────────────────────"
 #‍​‌‌​​​‌‌​‌‌​​‌​‌​‌‌​‌‌​​​‌‌​​‌​‌​‌‌​‌‌‌​​‌‌​‌‌‌‌​‌‌‌​​‌​‍
 # 		   		 		  	 	 		 		   		  	 	 		 			  		 				 			  	 
