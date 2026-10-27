@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0f1f">
+<meta name="description" content="خرید آنلاین سرویس VPN در ShopVPN؛ پلن مناسب را انتخاب کنید، پرداخت کنید و لینک اشتراک را سریع دریافت کنید. پشتیبانی، آموزش اتصال و مدیریت سرویس در پنل کاربری.">
+<meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<link rel="canonical" href="/store/">
+<link rel="alternate" hreflang="fa" href="/store/">
+<link rel="alternate" hreflang="en" href="/store/en/">
+<link rel="alternate" hreflang="x-default" href="/store/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="ShopVPN">
+<meta property="og:title" content="ShopVPN | خرید آنلاین سرویس VPN">
+<meta property="og:description" content="پلن مناسب را انتخاب کنید، آنلاین خرید کنید و لینک اشتراک را دریافت کنید.">
+<meta property="og:url" content="/store/">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="ShopVPN | خرید آنلاین سرویس VPN">
+<meta name="twitter:description" content="خرید آنلاین سرویس VPN با تحویل سریع و مدیریت سرویس در پنل کاربری.">
+<title>ShopVPN | خرید آنلاین سرویس VPN</title>
+<script type="application/ld+json">
+{
+  "@context":"https://schema.org",
+  "@type":"WebSite",
+  "name":"ShopVPN",
+  "url":"/store/",
+  "inLanguage":"fa",
+  "description":"فروشگاه آنلاین سرویس‌های VPN با تحویل لینک اشتراک و پنل مدیریت کاربر."
+}
+</script>
+
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Crect width=%2264%22 height=%2264%22 rx=%2214%22 fill=%22%230a0f1f%22/%3E%3Cpath d=%22M34 8 18 36h12l-4 20 18-30H32z%22 fill=%22%235fe3ff%22/%3E%3C/svg%3E"><meta property="og:image" content="/store/og-image.png"><meta name="twitter:image" content="/store/og-image.png">
+<link rel="stylesheet" href="store.css">
+</head>
+<body>
+
+<header class="wrap nav">
+  <a class="brand" href="#top" id="brand"><img id="brandLogo" class="brand-logo" alt=""><span id="brandName">ShopVPN</span></a>
+  <nav class="nav-links">
+    <a href="#plans" data-i18n="nav_plans">پلن‌ها</a>
+    <a href="#account" id="navAccount" data-i18n="nav_account" hidden>حساب من</a>
+    <a href="#how" data-i18n="nav_how">راهنما</a>
+    <a href="faq.html" data-i18n="nav_faq">سؤالات متداول</a>
+    <button class="pill ic" id="themeBtn" type="button" aria-label="Theme">◐</button>
+    <button class="glass pill" id="langBtn" type="button" aria-label="Language">EN</button>
+    <span id="userBox" hidden>
+      <span class="user-name" id="userName"></span>
+      <button class="glass pill" id="logoutBtn" type="button" data-i18n="logout">خروج</button>
+    </span>
+    <button class="btn btn-sm" id="loginBtn" type="button" data-i18n="login">ورود</button>
+  </nav>
+</header>
+
+<main id="top">
+  <section class="wrap">
+    <div class="panel">
+      <span class="tag"><span class="dot"></span><span data-i18n="hero_tag"></span></span>
+      <h1><span data-i18n="hero_a"></span> <em data-i18n="hero_b"></em></h1>
+      <div class="lbl" data-i18n="pn_label"></div>
+      <div class="big" id="pnBig"></div>
+      <div class="ins" id="pnIns"></div>
+      <div class="read"><b id="pnName"></b><span id="pnSub"></span></div>
+      <div class="chart" id="pnChart" role="group"></div>
+      <div class="axis"><span data-i18n="pn_low"></span><span data-i18n="pn_high"></span></div>
+    </div>
+    <div class="go" id="how">
+      <h2 data-i18n="go_title"></h2>
+      <p id="brandTagline" data-i18n="hero_sub"></p>
+      <button class="btn" id="pnBuy" type="button" disabled></button>
+      <ol class="steps"><li><b>1</b><span data-i18n="how1"></span></li><li><b>2</b><span data-i18n="how2"></span></li><li><b>3</b><span data-i18n="how3"></span></li></ol>
+    </div>
+  </section>
+
+  <section class="wrap" id="account" hidden>
+    <h2 data-i18n="acc_title">حساب من</h2>
+    <div class="glass wallet"><span data-i18n="acc_wallet">موجودی کیف پول</span><b id="walletAmt"></b></div>
+    <button class="glass pill" id="linkTelegramBtn" type="button" data-i18n="link_telegram">اتصال حساب به تلگرام</button>
+    <h3 data-i18n="acc_services">سرویس‌های من</h3>
+    <div class="cards" id="svcList"></div>
+    <p class="note" id="svcNote"></p>
+    <h3 data-i18n="acc_tickets">تیکت‌ها</h3>
+    <button class="btn btn-sm" id="newTicketBtn" type="button" data-i18n="tk_new">تیکت جدید</button>
+    <div class="tickets" id="tkList"></div>
+    <h3 data-i18n="acc_guide">آموزش اتصال</h3>
+    <details class="glass guide"><summary data-i18n="g1_t">اندروید</summary><p data-i18n="g1_b"></p></details>
+    <details class="glass guide"><summary data-i18n="g2_t">آیفون</summary><p data-i18n="g2_b"></p></details>
+    <details class="glass guide"><summary data-i18n="g3_t">ویندوز و مک</summary><p data-i18n="g3_b"></p></details>
+  </section>
+
+  <section class="wrap" id="plans">
+    <h2 data-i18n="plans_title">پلن‌ها</h2>
+    <div class="chips" id="chips" role="tablist"></div>
+    <div class="cards" id="cards" aria-live="polite"></div>
+    <p class="note" id="plansNote"></p>
+  </section>
+
+  <section class="wrap" id="faq">
+    <h2 data-i18n="faq_title">سؤالات متداول خرید</h2>
+    <div class="faq-list">
+      <details class="glass guide"><summary data-i18n="faq_q1">چطور از ShopVPN خرید کنم؟</summary><p data-i18n="faq_a1">پلن فعال را انتخاب کنید، روش پرداخت را انتخاب و مراحل سفارش را کامل کنید. وضعیت سفارش و تحویل از همین صفحه قابل پیگیری است.</p></details>
+      <details class="glass guide"><summary data-i18n="faq_q2">برای خرید حتماً باید تلگرام داشته باشم؟</summary><p data-i18n="faq_a2">خیر. می‌توانید با ایمیل وارد شوید و کد تأیید را دریافت کنید. برای برخی روش‌های پشتیبانی یا اتصال حساب، تلگرام اختیاری است.</p></details>
+      <details class="glass guide"><summary data-i18n="faq_q3">کانفیگ را چطور دریافت می‌کنم؟</summary><p data-i18n="faq_a3">پس از تأیید پرداخت، لینک اشتراک در صفحه نتیجه خرید یا بخش سرویس‌های حساب نمایش داده می‌شود. پرداخت‌های نیازمند بررسی دستی پس از تأیید مدیر تحویل می‌شوند.</p></details>
+      <details class="glass guide"><summary data-i18n="faq_q4">چطور سرویس را به برنامه VPN اضافه کنم؟</summary><p data-i18n="faq_a4">از دکمه افزودن به اپ در صفحه سفارش استفاده کنید یا لینک اشتراک را در برنامه سازگار مانند Hiddify یا v2rayNG وارد کنید.</p></details>
+      <details class="glass guide"><summary data-i18n="faq_q5">اگر پرداخت کردم ولی سرویس تحویل نشد چه کنم؟</summary><p data-i18n="faq_a5">شناسه سفارش را نگه دارید و از بخش تیکت‌ها یا راه ارتباطی پشتیبانی فروشگاه پیگیری کنید. پرداخت را دوباره انجام ندهید مگر اینکه وضعیت سفارش مشخص شده باشد.</p></details>
+    </div>
+    <p class="note"><a href="faq.html">مشاهده همه سؤالات متداول</a></p>
+  </section>
+
+</main>
+
+<footer class="wrap foot"><span id="footName">ShopVPN</span> · <a href="faq.html">سؤالات متداول</a> · <a href="connection-guide.html">راهنمای اتصال</a> · <a href="terms.html">قوانین و تماس</a></footer>
+
+<dialog id="loginDlg" class="glass dlg" aria-labelledby="dlgTitle">
+  <h3 id="dlgTitle" data-i18n="login_title">ورود با تلگرام</h3>
+  <p id="dlgText" data-i18n="login_sub">روی دکمه بزن، در تلگرام ورود را تأیید کن و به همین صفحه برگرد.</p>
+  <a class="btn" id="dlgLink" href="#" target="_blank" rel="noopener" data-i18n="login_open">باز کردن تلگرام</a>
+  <div class="email-login">
+    <hr><p data-i18n="email_or">یا ورود با ایمیل</p>
+    <label for="emailInput" data-i18n="email_label">ایمیل</label>
+    <input id="emailInput" type="email" autocomplete="email" maxlength="254" placeholder="name@example.com">
+    <button class="btn btn-sm" id="emailSendBtn" type="button" data-i18n="email_send">ارسال کد</button>
+    <div id="emailTurnstile" class="turnstile" hidden></div>
+    <div id="emailCodeWrap" hidden>
+      <label for="emailCodeInput" data-i18n="email_code_label">کد تأیید</label>
+      <div id="emailVerifyTurnstile" class="turnstile" hidden></div>
+      <input id="emailCodeInput" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456">
+      <button class="btn btn-sm" id="emailVerifyBtn" type="button" data-i18n="email_verify">تأیید و ورود</button>
+    </div>
+  </div>
+  <p class="note" id="dlgStatus" role="status"></p>
+  <button class="glass pill" id="dlgClose" type="button" data-i18n="close">بستن</button>
+</dialog>
+
+<dialog id="ckDlg" class="glass dlg wide" aria-labelledby="ckTitle">
+  <h3 id="ckTitle"></h3>
+  <div id="ckBody"></div>
+  <div id="checkoutTurnstile" class="turnstile" hidden></div>
+  <p class="note err" id="ckMsg" role="alert"></p>
+  <button class="glass pill" id="ckClose" type="button" data-i18n="close">بستن</button>
+</dialog>
+
+<script src="store.js"></script>
+</body>
+</html>
