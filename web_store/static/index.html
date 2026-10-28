@@ -8,6 +8,7 @@
 <meta name="description" content="{{DESC}}">
 <meta name="robots" content="index,follow,max-image-preview:large">
 <link rel="canonical" href="{{CANON}}">
+<link rel="manifest" href="/manifest.webmanifest">
 <link rel="alternate" hreflang="fa" href="{{ALT_FA}}">
 <link rel="alternate" hreflang="en" href="{{ALT_EN}}">
 <link rel="alternate" hreflang="x-default" href="{{ALT_FA}}">
@@ -18,8 +19,8 @@
 <meta property="og:image" content="{{OG_IMAGE}}">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23070A1A'/%3E%3Cpath d='M12 44C24 12 40 52 52 20' fill='none' stroke='%2335E6CB' stroke-width='6' stroke-linecap='round'/%3E%3C/svg%3E">
-<script src="/assets/boot.js"></script>
-<link rel="stylesheet" href="/assets/app.css">
+<script src="/assets/boot.js?v={{ASSET_VERSION}}" defer></script>
+<link rel="stylesheet" href="/assets/app.css?v={{ASSET_VERSION}}">
 </head>
 <body>
 <a class="skip" href="#view" data-i18n="skip">رفتن به محتوا</a>
@@ -76,7 +77,7 @@
 </dialog>
 
 <noscript><p class="wrap noscript">برای استفاده از فروشگاه، جاوااسکریپت مرورگر را فعال کنید. / Please enable JavaScript to use the store.</p></noscript>
-<script src="/assets/i18n.js"></script>
-<script src="/assets/app.js"></script>
+<script src="/assets/i18n.js?v={{ASSET_VERSION}}" defer></script>
+<script src="/assets/app.js?v={{ASSET_VERSION}}" defer></script>
 </body>
 </html>
