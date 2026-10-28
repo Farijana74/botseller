@@ -631,6 +631,15 @@ async def _notifier_supervisor():
 # ------------------------------------------------------------------ auth --
 
 
+class SSHNodeAutoInstallBody(BaseModel):
+    name: str
+    host: str
+    ssh_port: int = 22
+    username: str = "root"
+    password: Optional[str] = None
+    private_key: Optional[str] = None
+
+
 class SSHNodeCreateBody(BaseModel):
     name: str
     host: str
@@ -3862,8 +3871,7 @@ def api_reorder_products(body: ProductReorderBody, admin=Depends(require_permiss
 def api_add_product(body: ProductBody, admin=Depends(require_permission("catalog"))):
     if body.duration_days < 0:
         raise HTTPException(400, tr("مدت اعتبار نامعتبر است."))
-    if body.provision_server_id and body.provision_ssh_node_id:
-        raise HTTPException(400, "برای هر محصول فقط یک مقصد می‌توان انتخاب کرد: پنل VPN یا نود SSH.")
+    # هر دو مقصد همزمان مجاز است: محصول ترکیبی VPN+SSH با سهمیه مشترک.
     if body.provision_server_id:
         vpn_server = db.get_panel_server(body.provision_server_id)
         if not vpn_server or not vpn_server["is_active"]:
@@ -3945,8 +3953,15 @@ def api_edit_product(product_id: int, body: ProductEditBody, admin=Depends(requi
         if admin["tenant"]:
             raise HTTPException(status_code=403, detail=tr("اتصال مستقیم به پنل فقط برای بات اصلی مجاز است."))
         if body.provision_server_id and body.provision_ssh_node_id:
-            raise HTTPException(status_code=400, detail="برای هر محصول فقط یک مقصد می‌توان انتخاب کرد.")
-        if body.provision_ssh_node_id:
+            # محصول ترکیبی VPN+SSH (سهمیه مشترک)
+            if not db.get_panel_server(body.provision_server_id):
+                raise HTTPException(status_code=404, detail=tr("پنل VPN یافت نشد."))
+            node = next((n for n in db.list_ssh_nodes(active_only=True) if int(n["id"]) == int(body.provision_ssh_node_id)), None)
+            if not node or node.get("node_type") != "linux":
+                raise HTTPException(status_code=404, detail="نود Linux Agent فعال پیدا نشد.")
+            provision_server_id = body.provision_server_id
+            provision_ssh_node_id = int(body.provision_ssh_node_id)
+        elif body.provision_ssh_node_id:
             node = next((n for n in db.list_ssh_nodes(active_only=True) if int(n["id"]) == int(body.provision_ssh_node_id)), None)
             if not node or node.get("node_type") != "linux":
                 raise HTTPException(status_code=404, detail="نود Linux Agent فعال پیدا نشد.")
@@ -5851,6 +5866,44 @@ def api_ssh_overview(admin=Depends(require_permission("panels")), _fa=Depends(re
         nodes.append(item)
     return {"nodes": nodes, "pools": pool_items,
             "accounts": db.list_ssh_accounts()}
+
+
+@app.post("/api/ssh/nodes/auto-install")
+async def api_ssh_auto_install(body: SSHNodeAutoInstallBody, admin=Depends(require_permission("panels")), _fa=Depends(require_full_access_tenant)):
+    """نصب خودکار نود: فقط IP و رمز root (یا کلید) لازم است."""
+    name, host = body.name.strip(), body.host.strip()
+    if not name or not re.fullmatch(r"[A-Za-z0-9.\-:]{3,255}", host):
+        raise HTTPException(400, "نام و آدرس (IP یا دامنه) نود معتبر نیست.")
+    if not 1 <= int(body.ssh_port) <= 65535:
+        raise HTTPException(400, "پورت SSH نامعتبر است.")
+    if not (body.password or body.private_key):
+        raise HTTPException(400, "رمز root یا کلید خصوصی را وارد کنید.")
+    import ssh_auto_install
+    job_id = ssh_auto_install.start_install(db, name=name, host=host, ssh_port=body.ssh_port,
+        username=(body.username or "root").strip(), password=body.password, private_key=body.private_key)
+    db.log_admin_action(admin["id"], "ssh_node_auto_install", f"SSH node auto-install started: {name} ({host})", "ssh")
+    return {"ok": True, "job_id": job_id}
+
+
+@app.get("/api/ssh/nodes/install-jobs/{job_id}")
+def api_ssh_install_job(job_id: str, admin=Depends(require_permission("panels")), _fa=Depends(require_full_access_tenant)):
+    import ssh_auto_install
+    job = ssh_auto_install.get_job(job_id)
+    if not job:
+        raise HTTPException(404, "کار نصب پیدا نشد.")
+    return job
+
+
+@app.delete("/api/ssh/nodes/{node_id}")
+def api_ssh_delete_node(node_id: int, admin=Depends(require_permission("panels")), _fa=Depends(require_full_access_tenant)):
+    try:
+        removed = db.delete_ssh_node(node_id)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    if not removed:
+        raise HTTPException(404, "نود پیدا نشد.")
+    db.log_admin_action(admin["id"], "ssh_node_delete", f"SSH node #{node_id}", "ssh")
+    return {"ok": True}
 
 
 @app.post("/api/ssh/nodes")
