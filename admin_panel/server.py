@@ -5994,12 +5994,14 @@ def api_sub_page_preview(admin=Depends(require_permission("settings"))):
         "expires_at": (datetime.utcnow()).isoformat(),
     }
     now = int(time.time())
+    brand = (settings.get("dsub_brand") or db.get_setting("brand_name", "") or db.get_setting("shop_name", "")
+             or "ShopVPN").strip()
     info = {"total": 50 * ds.GB, "upload": 2 * ds.GB, "download": 5 * ds.GB, "expire": now + 25 * 86400}
     series = {"labels": ["شنبه", "یکشنبه", "دوشنبه", "سه‌شنبه", "چهارشنبه", "پنجشنبه", "جمعه"], "values": [1.2, 1.8, 2.1, 2.7, 3.4, 4.1, 5.0]}
     data = ds.build_page_data(mock_cc, info, [
         "vless://00000000-0000-0000-0000-000000000000@example.com:443?security=tls&type=tcp#🇩🇪%20Demo",
         "vmess://demo#🇳🇱%20Backup",
-    ], settings, ds._brand(settings), "https://example.com/s/demo", series, now)
+    ], settings, brand, "https://example.com/s/demo", series, now)
     data["live"] = True
     nonce = secrets.token_urlsafe(12)
     rendered = (template.replace("__NONCE__", nonce)
@@ -6013,6 +6015,15 @@ def api_sub_page_preview(admin=Depends(require_permission("settings"))):
         "content-security-policy": csp, "cache-control": "no-store", "referrer-policy": "no-referrer",
         "x-content-type-options": "nosniff", "x-robots-tag": "noindex, nofollow",
     })
+
+
+@app.get("/api/settings/web-store-preview-url")
+def api_web_store_preview_url(admin=Depends(require_permission("settings"))):
+    """Public origin of the web store service, used by the admin live preview iframe."""
+    url = (os.getenv("SHOPVPN_SEO_SITE_URL", "") or "").strip().rstrip("/")
+    if not url.startswith(("http://", "https://")):
+        url = ""
+    return {"url": url}
 
 
 class SettingBody(BaseModel):
