@@ -7230,7 +7230,7 @@ function renderSettingsGroups(settings) {
       <div><strong>👁️ پیش‌نمایش زنده فروشگاه وب</strong><div class="card-sub">تغییرات برندینگ را قبل از ذخیره هم می‌توانی ببینی.</div></div>
       <button type="button" class="btn btn-sm" id="web-store-preview-open">باز کردن در تب جدید</button>
     </div>
-    <iframe id="web-store-preview-frame" title="پیش‌نمایش فروشگاه وب" src="/store/?preview=1" loading="lazy"></iframe>
+    <iframe id="web-store-preview-frame" title="پیش‌نمایش فروشگاه وب" loading="lazy"></iframe>
   </div>
   <div class="settings-live-preview" data-settings-tab="content" style="${settingsActiveTab === 'content' ? '' : 'display:none'}">
     <div class="settings-live-preview-head">
@@ -9147,8 +9147,23 @@ function bindWebStoreLivePreview(root) {
     try { frame.contentWindow.postMessage({ type: 'shopvpn-web-store-preview', payload }, '*'); } catch(e) {}
   };
   const openBtn = $('#web-store-preview-open', root);
-  if (openBtn) openBtn.onclick = () => window.open('/store/?preview=1', '_blank', 'noopener');
   frame.addEventListener('load', send);
+  apiGet('/settings/web-store-preview-url').then(r => {
+    const base = (r && r.url) || '';
+    if (!base) {
+      frame.style.display = 'none';
+      if (openBtn) openBtn.style.display = 'none';
+      const note = document.createElement('div');
+      note.className = 'card-sub';
+      note.style.padding = '12px';
+      note.textContent = 'دامنه‌ی فروشگاه وب تنظیم نشده است (SHOPVPN_SEO_SITE_URL در فایل .env).';
+      frame.parentNode.insertBefore(note, frame);
+      return;
+    }
+    const target = base + '/?preview=1';
+    if (openBtn) openBtn.onclick = () => window.open(target, '_blank', 'noopener');
+    frame.src = target;
+  }).catch(() => {});
   $$('[data-key]', root).forEach(el => {
     if (el.dataset.key.startsWith('web_store_') || el.dataset.key === 'store_name') {
       el.addEventListener('input', send); el.addEventListener('change', send);
