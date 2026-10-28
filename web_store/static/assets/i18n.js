@@ -65,6 +65,11 @@ window.SV_I18N = {
     merge_confirm: "تأیید ادغام", merge_done: "ادغام انجام شد", merge_done_text: "دوباره با ایمیلت وارد شو؛ ورود بعدی به همان حساب تلگرام انجام می‌شود.",
     guide_title: "راهنمای اتصال", guide_sub: "بعد از خرید، لینک اشتراک را فقط در یک برنامه‌ی سازگار اضافه کن.",
     guide_android: "اندروید", guide_ios: "آیفون", guide_desktop: "ویندوز و مک", guide_errors: "اگر کار نکرد",
+    plat_android: "اندروید", plat_ios: "آیفون و آیپد", plat_windows: "ویندوز", plat_mac: "مک", plat_linux: "لینوکس",
+    guide_steps_t: "مراحل اتصال", guide_apps_t: "برنامه‌های پیشنهادی", guide_tips_t: "نکات مهم", guide_what_t: "لینک اشتراک چیست؟",
+    guide_what: "بعد از خرید یک لینک اشتراک می‌گیری. این لینک همه‌ی کانفیگ‌های سرویست را در خود دارد؛ فقط یک‌بار آن را در برنامه اضافه می‌کنی و با هر به‌روزرسانی، کانفیگ‌ها و وضعیت سرویس خودکار تازه می‌شود.",
+    app_all: "همه‌ی برنامه‌ها", app_rec: "پیشنهادی", app_add: "افزودن", app_download: "دانلود", apps_sheet_title: "افزودن به برنامه",
+    apps_sheet_hint: "سیستم‌عامل را انتخاب کن و روی «افزودن» بزن. اگر برنامه نصب نیست، اول دانلودش کن.", apps_none: "برای این سیستم‌عامل برنامه‌ای معرفی نشده است.",
     faq_page_sub: "پاسخ پرسش‌های رایج درباره‌ی خرید، پرداخت، تحویل و حساب.",
     terms_page_sub: "شرایط استفاده از فروشگاه، تحویل سرویس و راه‌های تماس با پشتیبانی.",
     faq: [
@@ -77,14 +82,87 @@ window.SV_I18N = {
       ["با پشتیبانی چطور حرف بزنم؟", "از بخش پشتیبانی حسابت تیکت بزن. اگر هنوز حساب نداری، شناسه‌ی سفارشت را نگه دار و از راه ارتباطی رسمی فروشگاه پیگیری کن."]
     ],
     guide: {
-      android: ["v2rayNG یا Hiddify را از منبع رسمی نصب کن.", "در صفحه‌ی تحویل یا حسابت روی «افزودن به برنامه» بزن.", "اگر دکمه کار نکرد، لینک را کپی کن و در بخش Subscription وارد کن.", "فهرست کانفیگ‌ها را به‌روز کن و اتصال را روشن کن."],
-      ios: ["Streisand یا Hiddify را از اپ‌استور نصب کن.", "روی «افزودن به برنامه» بزن یا لینک را از کلیپ‌بورد اضافه کن.", "اتصال را فعال کن و اجازه‌ی افزودن VPN را تأیید کن."],
-      desktop: ["Hiddify را نصب کن.", "لینک اشتراک را کپی کن.", "گزینه‌ی افزودن پروفایل از کلیپ‌بورد را بزن و اتصال را روشن کن."]
+          "android": [
+                "یکی از برنامه‌های فهرست پایین را نصب کن؛ v2rayNG و Hiddify انتخاب‌های رایج‌اند. فقط از لینک‌های همین صفحه یا منبع رسمی نصب کن.",
+                "بعد از خرید، در صفحه‌ی تحویل یا حسابت (بخش سرویس‌ها) روی دکمه‌ی نام برنامه بزن تا لینک اشتراک خودکار اضافه شود.",
+                "اگر برنامه باز نشد یا لینک اضافه نشد، دکمه‌ی «کپی» را بزن، وارد بخش اشتراک (Subscription) برنامه شو، یک اشتراک جدید بساز و لینک را بچسبان.",
+                "اشتراک را به‌روزرسانی کن (Update subscription) تا فهرست کانفیگ‌ها بیاید.",
+                "یک کانفیگ را انتخاب کن و دکمه‌ی اتصال را بزن. اگر اندروید اجازه‌ی VPN خواست، تأیید کن.",
+                "اگر یک کانفیگ وصل نشد، کانفیگ دیگری از همان فهرست را امتحان کن."
+          ],
+          "ios": [
+                "Streisand یا Hiddify را از App Store نصب کن (لینک‌ها پایین همین صفحه است). Shadowrocket هم هست ولی پولی است.",
+                "در صفحه‌ی تحویل یا حسابت روی دکمه‌ی نام برنامه بزن تا لینک اشتراک اضافه شود. اگر پیام تأیید آمد، قبول کن.",
+                "اگر باز نشد، دکمه‌ی «کپی» را بزن و در برنامه از بخش افزودن اشتراک (از کلیپ‌بورد) اضافه کن.",
+                "اشتراک را به‌روزرسانی کن تا کانفیگ‌ها بیایند.",
+                "اتصال را روشن کن و در پنجره‌ی iOS اجازه‌ی افزودن پیکربندی VPN را تأیید کن."
+          ],
+          "windows": [
+                "Hiddify یا v2rayN را از لینک‌های پایین دانلود و نصب کن.",
+                "در حسابت یا صفحه‌ی تحویل دکمه‌ی «کپی» را بزن تا لینک اشتراک کپی شود. دکمه‌ی افزودن مستقیم فقط برای برنامه‌هایی کار می‌کند که از آن پشتیبانی می‌کنند.",
+                "در Hiddify گزینه‌ی افزودن پروفایل جدید و بعد افزودن از کلیپ‌بورد را بزن؛ در v2rayN لینک را در بخش اشتراک‌ها (Subscription group) اضافه کن.",
+                "اشتراک را به‌روزرسانی کن و یک کانفیگ را انتخاب کن.",
+                "اتصال را روشن کن. برای اینکه کل سیستم از VPN استفاده کند، حالت System Proxy یا TUN برنامه را فعال کن."
+          ],
+          "mac": [
+                "Streisand را از App Store یا Hiddify را از لینک پایین نصب کن.",
+                "لینک اشتراک را کپی کن یا در حسابت روی دکمه‌ی نام برنامه بزن.",
+                "در برنامه گزینه‌ی افزودن پروفایل از کلیپ‌بورد را بزن.",
+                "اشتراک را به‌روزرسانی کن و یک کانفیگ را انتخاب کن.",
+                "اتصال را روشن کن و اگر مک اجازه‌ی افزودن VPN خواست، تأیید کن."
+          ],
+          "linux": [
+                "FlClash یا Hiddify را از صفحه‌ی انتشار (GitHub) همان برنامه نصب کن و نسخه‌ی مناسب توزیع خودت را انتخاب کن.",
+                "لینک اشتراک را از حسابت کپی کن.",
+                "در برنامه، افزودن پروفایل یا اشتراک از لینک یا کلیپ‌بورد را بزن و لینک را بچسبان.",
+                "اشتراک را به‌روزرسانی کن و یک کانفیگ را انتخاب کن.",
+                "اتصال را روشن کن و حالت پراکسی یا TUN را مطابق نیازت انتخاب کن (TUN معمولاً به دسترسی بالاتر نیاز دارد)."
+          ],
+          "desktop": [
+                "Hiddify یا v2rayN را از لینک‌های پایین دانلود و نصب کن.",
+                "در حسابت یا صفحه‌ی تحویل دکمه‌ی «کپی» را بزن تا لینک اشتراک کپی شود. دکمه‌ی افزودن مستقیم فقط برای برنامه‌هایی کار می‌کند که از آن پشتیبانی می‌کنند.",
+                "در Hiddify گزینه‌ی افزودن پروفایل جدید و بعد افزودن از کلیپ‌بورد را بزن؛ در v2rayN لینک را در بخش اشتراک‌ها (Subscription group) اضافه کن.",
+                "اشتراک را به‌روزرسانی کن و یک کانفیگ را انتخاب کن.",
+                "اتصال را روشن کن. برای اینکه کل سیستم از VPN استفاده کند، حالت System Proxy یا TUN برنامه را فعال کن."
+          ]
     },
+    guide_tips: [
+          "فقط لینک اشتراک را اضافه کن، نه کانفیگ‌ها را تک‌تک. با لینک اشتراک، تمدید و تغییر کانفیگ‌ها خودکار به‌روز می‌شود.",
+          "لینک اشتراک را با کسی به اشتراک نگذار؛ هر کسی که آن را داشته باشد از حجم تو مصرف می‌کند.",
+          "تاریخ و ساعت دستگاه باید روی حالت خودکار باشد، وگرنه بعضی کانفیگ‌ها وصل نمی‌شوند.",
+          "هم‌زمان یک VPN یا پراکسی دیگر روشن نداشته باش.",
+          "اپراتورها فرق می‌کنند؛ اگر کانفیگی با اینترنت همراه کار نکرد، آن را با وای‌فای امتحان کن یا کانفیگ دیگری انتخاب کن.",
+          "بعد از تمدید یا تغییر سرویس، اشتراک را در برنامه یک‌بار به‌روزرسانی کن."
+    ],
     guide_err: [
-      ["لینک باز نمی‌شود", "لینک کامل را دوباره کپی کن و مطمئن شو فاصله‌ای اول یا آخرش نیست."],
-      ["سفارش در انتظار مانده", "پرداخت ممکن است به تأیید درگاه یا بررسی ادمین نیاز داشته باشد. تا روشن شدن وضعیت دوباره پرداخت نکن."],
-      ["کانفیگ تحویل نشد", "شناسه‌ی سفارش را نگه دار و از بخش پشتیبانی پیگیری کن."]
+          [
+                "لینک باز نمی‌شود",
+                "لینک کامل را دوباره کپی کن و مطمئن شو فاصله‌ای اول یا آخرش نیست."
+          ],
+          [
+                "اشتراک به‌روز نمی‌شود",
+                "اگر VPN دیگری روشن است خاموشش کن و دوباره به‌روزرسانی را بزن. اگر نشد، یک‌بار با اینترنت دیگری (مثلاً وای‌فای) امتحان کن."
+          ],
+          [
+                "وصل می‌شوم ولی اینترنت ندارم",
+                "اشتراک را به‌روزرسانی کن، کانفیگ دیگری را انتخاب کن و تاریخ و ساعت دستگاه را روی خودکار بگذار."
+          ],
+          [
+                "فقط روی یک اپراتور کار می‌کند",
+                "کانفیگ دیگری از همان فهرست یا برنامه‌ی دیگری را امتحان کن؛ پایداری روی هر اپراتور متفاوت است."
+          ],
+          [
+                "حجم یا زمان سرویس تمام شده",
+                "بخش سرویس‌های حسابت را ببین و اگر دکمه‌ی تمدید فعال است، تمدید کن."
+          ],
+          [
+                "سفارش در انتظار مانده",
+                "پرداخت ممکن است به تأیید درگاه یا بررسی ادمین نیاز داشته باشد. تا روشن شدن وضعیت دوباره پرداخت نکن."
+          ],
+          [
+                "کانفیگ تحویل نشد",
+                "شناسه‌ی سفارش را نگه دار و از بخش پشتیبانی پیگیری کن."
+          ]
     ],
     terms: [
       ["حساب و ورود", ["ورود با تلگرام انجام می‌شود و در صورت فعال بودن، با کد یک‌بارمصرف ایمیل هم ممکن است.", "نشست ورود در مرورگر تا ۳۰ روز معتبر است و با خروج از حساب پایان می‌یابد.", "حفظ محرمانگی حساب با خود کاربر است."]],
@@ -161,6 +239,11 @@ window.SV_I18N = {
     merge_confirm: "Confirm merge", merge_done: "Merge complete", merge_done_text: "Sign in again with your email; it now opens the Telegram account.",
     guide_title: "Connection guide", guide_sub: "After buying, add the subscription link to one compatible app.",
     guide_android: "Android", guide_ios: "iPhone", guide_desktop: "Windows and Mac", guide_errors: "If it does not work",
+    plat_android: "Android", plat_ios: "iPhone and iPad", plat_windows: "Windows", plat_mac: "Mac", plat_linux: "Linux",
+    guide_steps_t: "Connection steps", guide_apps_t: "Recommended apps", guide_tips_t: "Good to know", guide_what_t: "What is a subscription link?",
+    guide_what: "After buying you get a subscription link. It holds all the configs of your service; you add it to an app once, and each update refreshes the configs and service status automatically.",
+    app_all: "All apps", app_rec: "Recommended", app_add: "Add", app_download: "Download", apps_sheet_title: "Add to an app",
+    apps_sheet_hint: "Choose your system and tap Add. If the app is not installed, download it first.", apps_none: "No apps are listed for this system.",
     faq_page_sub: "Answers about buying, paying, delivery and your account.",
     terms_page_sub: "Terms of using the store, service delivery and how to reach support.",
     faq: [
@@ -173,14 +256,87 @@ window.SV_I18N = {
       ["How do I contact support?", "Open a ticket from the support section of your account. If you have no account yet, keep your order ID and use the store's official contact."]
     ],
     guide: {
-      android: ["Install v2rayNG or Hiddify from an official source.", "Tap Add to app on the delivery page or in your account.", "If the button does not work, copy the link and paste it into the Subscription section.", "Update the config list and turn the connection on."],
-      ios: ["Install Streisand or Hiddify from the App Store.", "Tap Add to app, or add the link from your clipboard.", "Turn the connection on and approve adding the VPN."],
-      desktop: ["Install Hiddify.", "Copy the subscription link.", "Choose add profile from clipboard and turn the connection on."]
+          "android": [
+                "Install one of the apps listed below; v2rayNG and Hiddify are common choices. Install only from the links on this page or an official source.",
+                "After buying, tap the app-name button on the delivery page or in your account (Services) to add the subscription link automatically.",
+                "If the app does not open or the link is not added, tap Copy, open the app's Subscription section, create a new subscription and paste the link.",
+                "Update the subscription so the config list appears.",
+                "Pick a config and tap connect. If Android asks for VPN permission, approve it.",
+                "If one config does not connect, try another one from the same list."
+          ],
+          "ios": [
+                "Install Streisand or Hiddify from the App Store (links are further down this page). Shadowrocket also works but is paid.",
+                "Tap the app-name button on the delivery page or in your account to add the subscription link. Accept the confirmation prompt if one appears.",
+                "If it does not open, tap Copy and add the subscription from the clipboard inside the app.",
+                "Update the subscription so the configs appear.",
+                "Turn the connection on and approve adding the VPN configuration in the iOS prompt."
+          ],
+          "windows": [
+                "Download and install Hiddify or v2rayN from the links below.",
+                "Tap Copy in your account or on the delivery page. The direct add button only works for apps that support it.",
+                "In Hiddify choose add new profile, then add from clipboard; in v2rayN add the link under Subscription group.",
+                "Update the subscription and pick a config.",
+                "Turn the connection on. To route the whole system through the VPN, enable the app's System Proxy or TUN mode."
+          ],
+          "mac": [
+                "Install Streisand from the App Store, or Hiddify from the link below.",
+                "Copy the subscription link, or tap the app-name button in your account.",
+                "In the app choose add profile from clipboard.",
+                "Update the subscription and pick a config.",
+                "Turn the connection on and approve the VPN prompt if macOS shows one."
+          ],
+          "linux": [
+                "Install FlClash or Hiddify from the app's release page (GitHub) and pick the build that fits your distribution.",
+                "Copy the subscription link from your account.",
+                "In the app choose add profile or subscription from a link or clipboard and paste the link.",
+                "Update the subscription and pick a config.",
+                "Turn the connection on and choose proxy or TUN mode as needed (TUN usually needs elevated permissions)."
+          ],
+          "desktop": [
+                "Download and install Hiddify or v2rayN from the links below.",
+                "Tap Copy in your account or on the delivery page. The direct add button only works for apps that support it.",
+                "In Hiddify choose add new profile, then add from clipboard; in v2rayN add the link under Subscription group.",
+                "Update the subscription and pick a config.",
+                "Turn the connection on. To route the whole system through the VPN, enable the app's System Proxy or TUN mode."
+          ]
     },
+    guide_tips: [
+          "Add only the subscription link, not the configs one by one. With the link, renewals and config changes update on their own.",
+          "Do not share your subscription link; anyone who has it uses your data.",
+          "Keep the device date and time on automatic, otherwise some configs will not connect.",
+          "Do not keep another VPN or proxy on at the same time.",
+          "Mobile operators differ; if a config fails on mobile data, try it on Wi-Fi or pick another config.",
+          "After a renewal or a service change, update the subscription in the app once."
+    ],
     guide_err: [
-      ["The link will not open", "Copy the full link again and make sure there is no space at the start or end."],
-      ["The order stays pending", "The payment may need gateway confirmation or admin review. Do not pay again until the status is clear."],
-      ["The config was not delivered", "Keep the order ID and follow up through the support section."]
+          [
+                "The link will not open",
+                "Copy the full link again and make sure there is no space at the start or end."
+          ],
+          [
+                "The subscription will not update",
+                "Turn off any other VPN and update again. If it still fails, try once on a different connection such as Wi-Fi."
+          ],
+          [
+                "Connected but no internet",
+                "Update the subscription, pick another config and set the device date and time to automatic."
+          ],
+          [
+                "Works on one operator only",
+                "Try another config from the list or a different app; stability differs per operator."
+          ],
+          [
+                "Data or time ran out",
+                "Check the services section of your account and renew if the renew button is available."
+          ],
+          [
+                "The order stays pending",
+                "The payment may need gateway confirmation or admin review. Do not pay again until the status is clear."
+          ],
+          [
+                "The config was not delivered",
+                "Keep the order ID and follow up through the support section."
+          ]
     ],
     terms: [
       ["Account and sign-in", ["Sign-in is through Telegram and, when enabled, a one-time email code.", "A browser session is valid for up to 30 days and ends when you sign out.", "Keeping your account private is your responsibility."]],

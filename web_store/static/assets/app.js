@@ -6,11 +6,95 @@
   var T = I18N[lang];
   var NS = "http://www.w3.org/2000/svg";
   var root = document.documentElement;
-  var APPS = [
-    ["v2rayNG", function (u) { return "v2rayng://install-config?url=" + encodeURIComponent(u); }],
-    ["Streisand", function (u) { return "streisand://import/" + u; }],
-    ["Hiddify", function (u) { return "hiddify://import/" + u; }]
-  ];
+  var PLAT_ORDER = ["android", "ios", "windows", "mac", "linux"];
+  var APP_FALLBACK = {
+    android: [
+      { n: "v2rayNG", rec: 1, add: "v2rayng://install-sub?url=", dl: "https://github.com/2dust/v2rayNG/releases" },
+      { n: "Hiddify", add: "hiddify://import/", dl: "https://github.com/hiddify/hiddify-app/releases" }
+    ],
+    ios: [
+      { n: "Streisand", rec: 1, add: "streisand://import/", dl: "https://apps.apple.com/app/streisand/id6450534064" },
+      { n: "Hiddify", add: "hiddify://import/", dl: "https://apps.apple.com/app/hiddify-proxy-vpn/id6596777532" }
+    ],
+    windows: [{ n: "Hiddify", rec: 1, add: "hiddify://import/", dl: "https://github.com/hiddify/hiddify-app/releases" }],
+    mac: [{ n: "Streisand", rec: 1, add: "streisand://import/", dl: "https://apps.apple.com/app/streisand/id6450534064" }],
+    linux: [{ n: "Hiddify", rec: 1, add: "hiddify://import/", dl: "https://github.com/hiddify/hiddify-app/releases" }]
+  };
+  var appsP = null;
+  function loadApps() {
+    if (!appsP) {
+      appsP = api("/api/web/apps").then(function (d) { return d && d.apps ? d.apps : APP_FALLBACK; }).catch(function () { appsP = null; return APP_FALLBACK; });
+    }
+    return appsP;
+  }
+  function detectPlatform() {
+    var ua = navigator.userAgent || "";
+    if (/iPhone|iPad|iPod/.test(ua)) return "ios";
+    if (/Android/.test(ua)) return "android";
+    if (/Windows/.test(ua)) return "windows";
+    if (/Macintosh|Mac OS X/.test(ua)) return navigator.maxTouchPoints > 1 ? "ios" : "mac";
+    if (/Linux|X11/.test(ua)) return "linux";
+    return "android";
+  }
+  function safeHref(u) {
+    u = String(u || "");
+    return /^[a-z][a-z0-9+.\-]*:\/\//i.test(u) && !/^(javascript|data|vbscript|file):/i.test(u) ? u : "#";
+  }
+  function appLink(a, link) {
+    if (!a.add) return safeHref(a.dl);
+    if (a.fmt === "sr") {
+      var b = "";
+      try { b = btoa(unescape(encodeURIComponent(link))); } catch (e) { noop(); }
+      return safeHref(a.add + b + "?remark=" + encodeURIComponent(S.brand.name || ""));
+    }
+    return safeHref(a.add + encodeURIComponent(link));
+  }
+  function addAppButtons(row, link, before, label) {
+    if (!/^https?:\/\//i.test(link)) return;
+    loadApps().then(function (apps) {
+      var list = (apps[detectPlatform()] || []).filter(function (a) { return a.add; }).slice(0, 3);
+      list.forEach(function (a) {
+        row.insertBefore(h("a", { class: "btn small" + (label ? "" : " ghost"), href: appLink(a, link), text: label ? t("done_add", { app: a.n }) : a.n }), before || null);
+      });
+      row.insertBefore(h("button", { class: "btn small ghost", type: "button", text: t("app_all"), onclick: function () { appsSheet(link); } }), before || null);
+    });
+  }
+  function appCard(a, link) {
+    var row = h("div", { class: "row" });
+    if (link && a.add) row.appendChild(h("a", { class: "btn small", href: appLink(a, link), text: t("app_add") }));
+    if (a.dl) row.appendChild(h("a", { class: "btn small ghost", href: safeHref(a.dl), target: "_blank", rel: "noopener noreferrer", text: t("app_download") }));
+    return h("div", { class: "app-card" + (a.rec ? " rec" : "") },
+      h("div", { class: "row between" }, h("h3", { text: a.n }), a.rec ? h("span", { class: "badge ok", text: t("app_rec") }) : null),
+      a.d && lang === "fa" ? h("p", { text: a.d }) : null, row);
+  }
+  function platTabs(active, onPick) {
+    var tabs = h("div", { class: "tabs", role: "tablist" });
+    PLAT_ORDER.forEach(function (k) {
+      tabs.appendChild(h("button", { type: "button", role: "tab", "aria-selected": String(k === active), text: t("plat_" + k), onclick: function () { onPick(k); } }));
+    });
+    return tabs;
+  }
+  function appsSheet(link) {
+    var box = h("div", { class: "stack" }, spinnerBlock());
+    openSheet(t("apps_sheet_title"), box);
+    loadApps().then(function (apps) {
+      var active = detectPlatform();
+      var tabsHost = h("div");
+      var list = h("div", { class: "app-list" });
+      function draw() {
+        tabsHost.textContent = "";
+        tabsHost.appendChild(platTabs(active, function (k) { active = k; draw(); }));
+        list.textContent = "";
+        (apps[active] || []).forEach(function (a) { list.appendChild(appCard(a, link)); });
+        if (!list.firstChild) list.appendChild(h("p", { class: "mute", text: t("apps_none") }));
+      }
+      draw();
+      box.textContent = "";
+      box.appendChild(h("p", { class: "mute small-t", text: t("apps_sheet_hint") }));
+      box.appendChild(tabsHost);
+      box.appendChild(list);
+    });
+  }
   var S = {
     token: "",
     user: null,
@@ -565,22 +649,29 @@
     mount(pageShell(t("faq_title"), t("faq_page_sub"), faqList()), t("faq_title"));
   }
   function guidePage() {
-    var keys = ["android", "ios", "desktop"];
-    var active = "android";
-    var tabs = h("div", { class: "tabs", role: "tablist" });
-    var body = h("div", { class: "prose" });
+    var active = detectPlatform();
+    var tabsHost = h("div");
+    var body = h("div", { class: "stack" });
+    function steps(k) { return (T.guide && T.guide[k]) || I18N.fa.guide[k] || []; }
+    function section(title, node) { return h("section", { class: "stack" }, h("h2", { text: title }), node); }
     function draw() {
-      tabs.textContent = "";
-      keys.forEach(function (k) {
-        tabs.appendChild(h("button", { type: "button", role: "tab", "aria-selected": String(k === active), text: t("guide_" + k), onclick: function () { active = k; draw(); } }));
-      });
+      tabsHost.textContent = "";
+      tabsHost.appendChild(platTabs(active, function (k) { active = k; draw(); }));
       body.textContent = "";
-      body.appendChild(h("ol", { class: "mute stack", style: { paddingInlineStart: "22px", margin: "0" } }, T.guide[active].map(function (s) { return h("li", { text: s }); })));
-      body.appendChild(h("section", null, h("h2", { text: t("guide_errors") }),
-        h("ul", null, T.guide_err.map(function (e) { return h("li", null, h("b", { text: e[0] + ": " }), e[1]); }))));
+      body.appendChild(section(t("guide_steps_t"), h("ol", { class: "mute stack guide-steps" }, steps(active).map(function (x) { return h("li", { text: x }); }))));
+      var appsBox = h("div", { class: "app-list" }, spinnerBlock());
+      body.appendChild(section(t("guide_apps_t"), appsBox));
+      loadApps().then(function (apps) {
+        appsBox.textContent = "";
+        (apps[active] || []).forEach(function (a) { appsBox.appendChild(appCard(a, "")); });
+        if (!appsBox.firstChild) appsBox.appendChild(h("p", { class: "mute", text: t("apps_none") }));
+      });
+      body.appendChild(section(t("guide_tips_t"), h("ul", { class: "mute guide-list" }, T.guide_tips.map(function (x) { return h("li", { text: x }); }))));
+      body.appendChild(section(t("guide_errors"), h("ul", { class: "guide-list" }, T.guide_err.map(function (e) { return h("li", null, h("b", { text: e[0] + ": " }), e[1]); }))));
     }
     draw();
-    mount(pageShell(t("guide_title"), t("guide_sub"), h("div", { class: "stack", style: { marginTop: "24px" } }, tabs, body)), t("guide_title"));
+    var what = h("div", { class: "card guide-what" }, h("h2", { text: t("guide_what_t") }), h("p", { class: "mute", text: t("guide_what") }));
+    mount(pageShell(t("guide_title"), t("guide_sub"), h("div", { class: "stack", style: { marginTop: "24px" } }, what, tabsHost, body)), t("guide_title"));
   }
   function termsPage() {
     var content = h("div", { class: "prose" }, T.terms.map(function (sec) {
@@ -874,8 +965,8 @@
           fetchBlob("/api/web/orders/" + orderId + "/qr/" + i).then(function (bl) { img.src = URL.createObjectURL(bl); }).catch(function () { qrHost.textContent = ""; });
         });
         var row = h("div", { class: "row" });
-        if (/^https?:\/\//i.test(link)) APPS.forEach(function (a) { row.appendChild(h("a", { class: "btn small", href: a[1](link), text: t("done_add", { app: a[0] }) })); });
         row.appendChild(qrBtn);
+        addAppButtons(row, link, qrBtn, true);
         card.appendChild(h("div", { class: "stack" }, h("span", { class: "mute small-t", text: t("done_link") }), copyBox(link), row, qrHost));
       });
       card.appendChild(h("p", { class: "mute small-t", text: t("done_hint") }));
@@ -1121,8 +1212,9 @@
       fetchBlob("/api/web/qr?link=" + encodeURIComponent(s.link)).then(function (bl) { img.src = URL.createObjectURL(bl); }).catch(function () { qrHost.textContent = ""; });
     });
     var actions = h("div", { class: "row svc-actions" }, h("button", { class: "btn small", type: "button", text: t("copy"), onclick: function () { copyText(s.link); } }), qrBtn);
-    if (/^https?:\/\//i.test(s.link)) APPS.forEach(function (a) { actions.appendChild(h("a", { class: "btn small ghost", href: a[1](s.link), text: a[0] })); });
-    if (s.can_renew && renewEnabled) actions.appendChild(h("button", { class: "btn small ghost", type: "button", text: t("svc_renew"), onclick: function () { renewSheet(s, reload); } }));
+    var renewBtn = null;
+    if (s.can_renew && renewEnabled) { renewBtn = h("button", { class: "btn small ghost", type: "button", text: t("svc_renew"), onclick: function () { renewSheet(s, reload); } }); actions.appendChild(renewBtn); }
+    addAppButtons(actions, s.link, renewBtn, false);
 
     var usage = usageBlock(s, badges);
     var title = h("div", { class: "svc-title" }, h("div", { class: "svc-icon", text: "⌁" }), h("div", null,
