@@ -33,6 +33,13 @@ def _parse_time(value):
 def _env_secret_resolver(reference: str):
     """Resolve only explicit env:NAME references; never treat a ref as a secret."""
     reference = str(reference or "")
+    if reference.startswith("enc:"):
+        # توکن رمزنگاری‌شده در دیتابیس (نودهای نصب‌شده با نصب خودکار)
+        from ssh_credentials import decrypt_credential
+        try:
+            return decrypt_credential(reference[4:])
+        except RuntimeError as exc:
+            raise SSHProviderError(str(exc))
     if not reference.startswith("env:"):
         raise SSHProviderError("secret_ref پشتیبانی‌نشده است؛ از env:VARIABLE_NAME استفاده کنید")
     name = reference[4:].strip()

@@ -556,6 +556,15 @@ class Agent:
 
     def app(self):
         app = web.Application(client_max_size=64 * 1024)
+        allowed = {x.strip() for x in os.getenv("SHOPVPN_AGENT_ALLOWED_IPS", "").split(",") if x.strip()}
+
+        @web.middleware
+        async def ip_middleware(request, handler):
+            if allowed and request.remote not in allowed:
+                raise web.HTTPForbidden(text="forbidden")
+            return await handler(request)
+        app.middlewares.append(ip_middleware)
+
         @web.middleware
         async def auth_middleware(request, handler):
             if request.path != "/health":
@@ -582,7 +591,14 @@ def main():
     args = parser.parse_args()
     token = os.getenv("SHOPVPN_AGENT_TOKEN", "")
     agent = Agent(token, args.db)
-    web.run_app(agent.app(), host=args.host, port=args.port, access_log=None)
+    ssl_ctx = None
+    cert, key = os.getenv("SHOPVPN_AGENT_TLS_CERT", ""), os.getenv("SHOPVPN_AGENT_TLS_KEY", "")
+    if cert and key:
+        import ssl
+        ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        ssl_ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+        ssl_ctx.load_cert_chain(cert, key)
+    web.run_app(agent.app(), host=args.host, port=args.port, access_log=None, ssl_context=ssl_ctx)
 
 
 if __name__ == "__main__":

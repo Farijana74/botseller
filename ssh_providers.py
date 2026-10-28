@@ -98,6 +98,7 @@ class LinuxAgentSSHProvider(BaseSSHProvider):
         token = self.resolve_secret()
         if not token:
             raise SSHProviderError("توکن Agent از secret_ref دریافت نشد")
+        self._pin = str(config.get("cert_sha256") or "").replace(":", "").strip().lower()
         return url, str(token), timeout
 
     async def _request(self, method, path, payload=None):
@@ -106,7 +107,8 @@ class LinuxAgentSSHProvider(BaseSSHProvider):
         headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
         try:
             async with aiohttp.ClientSession(timeout=client_timeout, headers=headers) as session:
-                async with session.request(method, url + path, json=payload) as response:
+                ssl_arg = aiohttp.Fingerprint(bytes.fromhex(self._pin)) if (getattr(self, "_pin", "") and url.startswith("https://")) else None
+                async with session.request(method, url + path, json=payload, ssl=ssl_arg) as response:
                     raw = await response.text()
                     if response.status >= 400:
                         safe_detail = raw[:240].replace("\n", " ")

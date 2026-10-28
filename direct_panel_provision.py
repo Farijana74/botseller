@@ -51,9 +51,17 @@ async def provision_direct(db, product, quantity: int = 1, user_id: int = None, 
         ssh_node_id = product["provision_ssh_node_id"]
     except (KeyError, IndexError):
         pass
+    if ssh_node_id and product["provision_server_id"]:
+        return await _provision_combined(db, product, quantity=quantity, user_id=user_id, order_id=order_id)
     if ssh_node_id:
         return await provision_ssh_direct(db, product, quantity=quantity, user_id=user_id, order_id=order_id)
+    return await _provision_vpn(db, product, quantity=quantity, user_id=user_id, order_id=order_id)
 
+
+async def _provision_vpn(db, product, quantity: int = 1, user_id: int = None, order_id: int = None,
+                         shared_pool: bool = False) -> list:
+    """ساخت کاربر روی پنل VPN. با shared_pool=True حجم روی خود پنل نامحدود ساخته می‌شود
+    (سقف حجم را استخر مشترک VPN+SSH اعمال می‌کند) ولی حجم محصول در custom_configs ثبت می‌شود."""
     if not isinstance(quantity, int) or quantity < 1:
         raise ProvisionError("تعداد درخواستی نامعتبر است.")
 
@@ -119,7 +127,7 @@ async def provision_direct(db, product, quantity: int = 1, user_id: int = None, 
                 if db.is_custom_username_taken(candidate):
                     continue
                 try:
-                    result = await provider.create_user(candidate, volume_gb, duration_days, **extra_kwargs)
+                    result = await provider.create_user(candidate, 0 if shared_pool else volume_gb, duration_days, **extra_kwargs)
                     username = candidate
                     break
                 except PanelUsernameTakenError:
@@ -143,7 +151,7 @@ async def provision_direct(db, product, quantity: int = 1, user_id: int = None, 
     if user_id is not None:
         for item in built:
             try:
-                db.add_custom_config(
+                item["custom_config_id"] = db.add_custom_config(
                     user_id, server["id"], item["username"], item["volume_gb"], item["duration_days"],
                     item["subscription_url"], order_id=order_id, source="direct_product",
                     user_limit=item.get("user_limit"),
@@ -162,6 +170,66 @@ async def provision_direct(db, product, quantity: int = 1, user_id: int = None, 
     return built
 #‍​‌‌​​​‌‌​‌‌​​‌​‌​‌‌​‌‌​​​‌‌​​‌​‌​‌‌​‌‌‌​​‌‌​‌‌‌‌​‌‌‌​​‌​‍
 # 		   		 		  	 	 		 		   		  	 	 		 			  		 				 			  	 
+
+
+async def _provision_combined(db, product, quantity: int = 1, user_id: int = None, order_id: int = None) -> list:
+    """محصول ترکیبی VPN+SSH با سهمیه مشترک: هر دو سرویس عضو یک quota pool هستند
+    (حجم و انقضا مشترک؛ ‌quota_reconciler مصرف هر دو را جمع و در صورت اتمام هر دو را قطع می‌کند).
+    همه‌یا‌هیچ: اگر هر مرحله‌ای شکست بخورد، آنچه تا آن لحظه ساخته شده پاک می‌شود."""
+    if user_id is None:
+        raise ProvisionError("شناسه کاربر برای ساخت محصول ترکیبی VPN+SSH الزامی است.")
+    # ابتدا SSH (شکست‌پذیرتر: نیاز به شمارنده معتبر)، بعد VPN.
+    ssh_items = await provision_ssh_direct(db, product, quantity=quantity, user_id=user_id, order_id=order_id)
+    pool_id = ssh_items[0]["quota_pool_id"]
+
+    async def _rollback_ssh():
+        try:
+            from ssh_providers import get_ssh_provider
+            from quota_reconciler import _env_secret_resolver
+            node = next((n for n in db.list_ssh_nodes() if int(n["id"]) == int(product["provision_ssh_node_id"])), None)
+            provider = get_ssh_provider(node, secret_resolver=_env_secret_resolver)
+            for item in ssh_items:
+                try:
+                    await provider.delete_account(item["account_id"])
+                except Exception:
+                    logger.exception("combined rollback: SSH delete failed for %s", item["account_id"])
+        except Exception:
+            logger.exception("combined rollback: SSH provider unavailable")
+        db.delete_quota_pool(pool_id)
+
+    try:
+        vpn_items = await _provision_vpn(db, product, quantity=quantity, user_id=user_id,
+                                         order_id=order_id, shared_pool=True)
+    except Exception:
+        await _rollback_ssh()
+        raise
+
+    try:
+        for item in vpn_items:
+            cc_id = item.get("custom_config_id")
+            if not cc_id:
+                raise ProvisionError("ثبت سرویس VPN برای اتصال به سهمیه مشترک ناموفق بود.")
+            db.attach_custom_config_to_quota_pool(pool_id, cc_id)
+    except Exception as exc:
+        provider = get_provider(db.get_panel_server(product["provision_server_id"]))
+        for item in vpn_items:
+            try:
+                await provider.delete_user(item["username"])
+            except Exception:
+                logger.exception("combined rollback: VPN delete failed for %s", item["username"])
+            if item.get("custom_config_id"):
+                with db._get_conn() as conn:
+                    conn.execute("DELETE FROM quota_pool_members WHERE service_kind='vpn' AND service_id=?",
+                                 (f"custom_config:{int(item['custom_config_id'])}",))
+                    conn.execute("DELETE FROM custom_configs WHERE id=?", (int(item["custom_config_id"]),))
+        await _rollback_ssh()
+        if isinstance(exc, ProvisionError):
+            raise
+        raise ProvisionError(f"اتصال سرویس‌ها به سهمیه مشترک ناموفق بود: {exc}") from exc
+
+    for item in vpn_items:
+        item["quota_pool_id"] = int(pool_id)
+    return vpn_items + ssh_items
 
 
 async def provision_ssh_direct(db, product, quantity: int = 1, user_id: int = None, order_id: int = None) -> list:
