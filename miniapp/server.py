@@ -81,6 +81,7 @@ import web_auth
 import ai_support
 import receipt_ai_check
 import report_router
+import dedicated_sub
 import card_to_card_payment
 from asset_versioning import static_version, ApiNoStoreMiddleware
 from database import Database, MENU_BUTTON_META, DEFAULT_MENU_ORDER, PAYMENT_METHOD_META
@@ -793,7 +794,7 @@ def api_custom_configs(auth=Depends(get_verified_user)):
             "display_name": c["display_name"] or c["username"],
             "volume_gb": c["volume_gb"],
             "duration_days": c["duration_days"],
-            "subscription_url": c["subscription_url"],
+            "subscription_url": dedicated_sub.display_link(db, c["id"], c["subscription_url"]),
             "created_at": c["created_at"],
             "expires_at": c["expires_at"],
             "start_on_first_use": (c["start_on_first_use"] if "start_on_first_use" in c.keys() else 0) == 1,
@@ -1009,7 +1010,7 @@ async def api_custom_config_cut_access(custom_config_id: int, auth=Depends(get_v
         db.update_custom_config_subscription_url(cc["id"], result.subscription_url)
     leak_index.schedule_refresh(db, cc["id"])
     db.add_custom_config_history(cc["id"], "cut_access", "دسترسی قطع و لینک جدید صادر شد")
-    return {"status": "ok", "subscription_url": result.subscription_url}
+    return {"status": "ok", "subscription_url": dedicated_sub.display_link(db, cc["id"], result.subscription_url)}
 
 
 # «تمدید کامل سرویس» - معادل svc_renew:full / svc_renew_pick در ربات اصلی؛ فقط
@@ -1264,7 +1265,7 @@ async def api_create_custom_config(body: CustomConfigPurchase, auth=Depends(requ
                 detail=tr("خطایی در ثبت کانفیگ رخ داد؛ اعتبار شما بازگردانده شد. دوباره تلاش کن."),
             )
         return {
-            "status": "approved", "link": result.subscription_url,
+            "status": "approved", "link": dedicated_sub.dedicated_link_for_upstream(db, result.subscription_url),
             "reseller_credit_left": reseller_db.get_reseller_credit(tg_id),
         }
 
@@ -1327,7 +1328,7 @@ async def api_create_custom_config(body: CustomConfigPurchase, auth=Depends(requ
                 db.reward_referrer_if_first_purchase(tg_id, price)
             except Exception:
                 pass
-            return {"status": "approved", "order_id": order_id, "link": result.subscription_url}
+            return {"status": "approved", "order_id": order_id, "link": dedicated_sub.dedicated_link_for_upstream(db, result.subscription_url)}
 
         if not db.has_any_payable_method(order["final_price"], allowed_methods):
             db.reject_order(order_id)
@@ -1398,7 +1399,7 @@ def api_test_config_status(auth=Depends(get_verified_user)):
     if used:
         row = db.get_test_custom_config_for_user(tg_id)
         if row:
-            link = row["subscription_url"]
+            link = dedicated_sub.display_link(db, row["id"], row["subscription_url"])
         else:
             legacy = db.get_assigned_test_config(tg_id)
             link = legacy["link"] if legacy else None
@@ -1499,7 +1500,7 @@ async def api_test_config_claim(payload: TestConfigClaim, auth=Depends(require_j
             f"📦 {html_lib.escape(plan['name'])} - {html_lib.escape(format_plan_amount(plan))}\n"
             f"🔑 <code>{html_lib.escape(result.get('username') or '')}</code>",
         )
-        return {"link": result["subscription_url"]}
+        return {"link": dedicated_sub.dedicated_link_for_upstream(db, result["subscription_url"])}
 
     if not is_full_access:
         raise HTTPException(status_code=400, detail=tr("در حال حاضر هیچ پلن کانفیگ تستی تعریف نشده است."))
@@ -1630,6 +1631,7 @@ def _compute_connect_status(settings: dict, info: dict, assigned_at_raw) -> Opti
 @app.get("/api/sub-info")
 async def api_sub_info(link: str = Query(...), auth=Depends(get_verified_user)):
     tg_id, db, _ = auth
+    link = dedicated_sub.upstream_for_link(db, link)
     orders = db.get_user_orders(tg_id)
     owns_link = False
     assigned_at_raw = None
@@ -2302,7 +2304,7 @@ async def api_create_order(body: OrderCreate, request: Request, auth=Depends(req
                 db.approve_order_auto(order_id)
                 await report_order_completed(tenant, db, order_id, "wallet")
                 db.reward_referrer_if_first_purchase(tg_id, order["final_price"] or total_price)
-                links = [r["subscription_url"] for r in prov_results]
+                links = [dedicated_sub.dedicated_link_for_upstream(db, r["subscription_url"]) for r in prov_results]
                 return {
                     "status": "approved", "order_id": order_id,
                     "link": links[0], "links": links,
@@ -4288,7 +4290,7 @@ async def api_wheel_spin(auth=Depends(require_joined)):
         )
         return {
             "won": True, "kind": "config", "title": prize["title"],
-            "amount_label": amount, "link": result["subscription_url"],
+            "amount_label": amount, "link": dedicated_sub.dedicated_link_for_upstream(db, result["subscription_url"]),
         }
     if prize is not None and prize["discount_percent"]:
         percent = int(prize["discount_percent"])
