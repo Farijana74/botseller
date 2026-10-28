@@ -1,18 +1,17 @@
+import base64
 import unittest
 from urllib.parse import urlsplit, unquote
 from ssh_uri import build_ssh_uri
 
 
 class SSHUriTests(unittest.TestCase):
-    def test_uri_contains_credentials_and_explicit_udpgw(self):
-        uri = build_ssh_uri("fff_user", "P4ss_word-123", "31.56.196.63", 38331, "Fff")
+    def test_uri_has_base64_credentials(self):
+        uri = build_ssh_uri("root", "ZP9QUTS47qAg#l4U", "31.56.196.63", 24720, "Fff")
+        self.assertEqual(uri, "ssh://cm9vdDpaUDlRVVRTNDdxQWcjbDRV@31.56.196.63:24720#Fff")
         parsed = urlsplit(uri)
-        self.assertEqual(parsed.scheme, "ssh")
         self.assertEqual(parsed.hostname, "31.56.196.63")
-        self.assertEqual(parsed.port, 38331)
-        self.assertEqual(unquote(parsed.username), "fff_user")
-        self.assertEqual(unquote(parsed.password), "P4ss_word-123")
-        self.assertEqual(parsed.query, "udpgw=0")
+        self.assertEqual(parsed.port, 24720)
+        self.assertEqual(base64.b64decode(parsed.username).decode(), "root:ZP9QUTS47qAg#l4U")
         self.assertEqual(unquote(parsed.fragment), "Fff")
 
     def test_ipv6_is_bracketed(self):

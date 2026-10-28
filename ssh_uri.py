@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
-"""Build SSH share URIs with explicit V2Box-compatible UDPGW setting."""
+"""Build SSH share URIs in the format the client app exports:
+ssh://BASE64(user:pass)@host:port#remark
+"""
+import base64
 import urllib.parse
 
 
@@ -11,7 +14,6 @@ def build_ssh_uri(username: str, password: str, host: str, port: int, remark: st
         raise ValueError("SSH URI requires username, password, and host")
     if ":" in host and not host.startswith("["):
         host = f"[{host}]"
-    user = urllib.parse.quote(username, safe="")
-    secret = urllib.parse.quote(password, safe="")
+    userinfo = base64.b64encode(f"{username}:{password}".encode("utf-8")).decode("ascii")
     label = urllib.parse.quote(str(remark or "SSH"), safe="")
-    return f"ssh://{user}:{secret}@{host}:{int(port)}?udpgw=0#{label}"
+    return f"ssh://{userinfo}@{host}:{int(port)}#{label}"
