@@ -37,6 +37,7 @@ from .gift_cards import GiftCardsMixin
 from .seasons import SeasonsMixin
 from .engagement import EngagementMixin
 from .dedicated_sub import DedicatedSubMixin
+from .usage import UsageMixin
 
 class Database(
     DatabaseBase,
@@ -55,6 +56,7 @@ class Database(
     SeasonsMixin,
     EngagementMixin,
     DedicatedSubMixin,
+    UsageMixin,
 ):
     pass
 
