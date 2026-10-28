@@ -100,7 +100,7 @@ class WebLoginPoll(BaseModel):
 @router.get("/api/web/security-config")
 def api_web_security_config(tenant: Tenant = Depends(get_tenant)):
     _web_main_only(tenant)
-    email_ready = all(os.getenv(k, "").strip() for k in ("SHOPVPN_SMTP_HOST", "SHOPVPN_SMTP_USER")) and bool(os.getenv("SHOPVPN_SMTP_PASSWORD", ""))
+    email_ready = web_auth.email_configured()
     return {
         "turnstile_site_key": os.getenv("SHOPVPN_TURNSTILE_SITE_KEY", "").strip(),
         "email_enabled": email_ready,
