@@ -259,7 +259,7 @@ def _web_services(db: Database, tg_id: int) -> list:
             "key": f"c{c['id']}", "kind": "custom", "id": c["id"],
             "name": c["display_name"] or c["username"],
             "volume_gb": c["volume_gb"], "duration_days": c["duration_days"],
-            "link": c["subscription_url"], "expires_at": c["expires_at"],
+            "link": ds.display_link(db, c["id"], c["subscription_url"]), "expires_at": c["expires_at"],
             "is_test": is_test,
             "enabled": (c["enabled"] if "enabled" in c.keys() else 1) == 1,
             "can_renew": not is_test,
@@ -326,7 +326,7 @@ def _web_order_view(db: Database, tg_id: int, order_id: int):
     if order["status"] == "approved":
         customs = [c for c in db.get_custom_configs_for_user(tg_id) if c["order_id"] == order_id]
         if customs:
-            links = [c["subscription_url"] for c in customs if c["subscription_url"]]
+            links = [ds.display_link(db, c["id"], c["subscription_url"]) for c in customs if c["subscription_url"]]
             expires_at = customs[0]["expires_at"]
         else:
             cfgs = list(db.get_order_configs(order_id) or [])

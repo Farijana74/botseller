@@ -10,7 +10,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -95,6 +95,19 @@ def _mount_core_routes(target: FastAPI) -> None:
 app = FastAPI(title="ShopVPN Web Store", docs_url=None, redoc_url=None, openapi_url=None)
 
 
+def _preview_ancestors() -> list:
+    """Origins allowed to embed the preview: the admin panel and any extras from the env."""
+    raw = [os.getenv("ADMIN_PANEL_URL", "")] + os.getenv("SHOPVPN_PREVIEW_ORIGINS", "").split(",")
+    out = []
+    for item in raw:
+        parsed = urlparse((item or "").strip())
+        if parsed.scheme in ("http", "https") and parsed.netloc:
+            origin = f"{parsed.scheme}://{parsed.netloc}"
+            if origin not in out:
+                out.append(origin)
+    return out
+
+
 @app.middleware("http")
 async def _security_headers(request: Request, call_next):
     response = await call_next(request)
@@ -102,7 +115,9 @@ async def _security_headers(request: Request, call_next):
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
     preview = request.url.path in ("/", "/en", "/en/") and request.query_params.get("preview") == "1"
-    ancestors = "'self'" if preview else "'none'"
+    ancestors = "'none'"
+    if preview:
+        ancestors = " ".join(["'self'"] + _preview_ancestors())
     if not preview:
         response.headers.setdefault("X-Frame-Options", "DENY")
     response.headers.setdefault(
