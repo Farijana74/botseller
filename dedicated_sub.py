@@ -449,7 +449,7 @@ def quota_info_for_config(db, config_id: int) -> Optional[dict]:
         return None
 
 
-def ssh_uris_for_config(db, config_id) -> List[str]:
+def ssh_uris_for_config(db, config_id, cc=None) -> List[str]:
     """لینک‌های ssh:// حساب‌های فعالِ متصل به این سرویس؛ برای افزودن داخل ساب اختصاصی."""
     try:
         rows = db.ssh_accounts_for_config(int(config_id))
@@ -466,6 +466,10 @@ def ssh_uris_for_config(db, config_id) -> List[str]:
             continue
         host = str(row.get("host") or "")
         remark = str(row.get("node_name") or "").strip() or "SSH " + str(row.get("username") or "")
+        # مثل بقیه کانفیگ‌ها: نام نود + نام کاربری سرویس
+        svc = str(_row(cc, "username") or _row(cc, "display_name") or "").strip() if cc is not None else ""
+        if svc and svc not in remark:
+            remark += " " + svc
         if len(rows) > 1:
             remark += f" {n}"
         try:
