@@ -286,6 +286,21 @@ class DbTests(unittest.TestCase):
         self.assertIsNone(self.db.ds_get_config_by_token("x" * 200))
         self.assertIsNone(self.db.ds_get_or_create_token(99999))
 
+    def test_display_and_reverse_link(self):
+        up = "https://panel.example.com/sub/XYZ"
+        cid = add_service(self.db, url=up)
+        self.assertEqual(ds.display_link(self.db, cid, up), up)
+        self.assertEqual(ds.upstream_for_link(self.db, up), up)
+        self.db.set_setting("dsub_enabled", "1")
+        self.db.set_setting("dsub_base_url", "https://sub.example.com")
+        shown = ds.display_link(self.db, cid, up)
+        self.assertEqual(shown, f"https://sub.example.com/s/{self.db.ds_get_or_create_token(cid)}")
+        self.assertEqual(ds.upstream_for_link(self.db, shown), up)
+        self.assertEqual(ds.upstream_for_link(self.db, shown + "?x=1"), up)
+        self.assertEqual(ds.upstream_for_link(self.db, "https://sub.example.com/s/unknown"), "https://sub.example.com/s/unknown")
+        self.assertEqual(ds.upstream_for_link(self.db, up), up)
+        self.assertEqual(ds.display_link(self.db, None, up), up)
+
     def test_link_helpers(self):
         cid = add_service(self.db, url="https://panel.example.com/sub/ABC")
         # خاموش: لینک اصلی

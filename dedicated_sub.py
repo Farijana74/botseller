@@ -213,6 +213,32 @@ def dedicated_link_for_upstream(db, upstream_url: str) -> str:
         return upstream_url
 
 
+def display_link(db, config_id, upstream_url: str) -> str:
+    """لینک نمایشی سرویس با شناسه‌ی مشخص؛ در هر خطا یا خاموش بودن همان لینک پنل."""
+    try:
+        if config_id and is_enabled(db):
+            return link_for_config(db, config_id) or upstream_url
+    except Exception:
+        pass
+    return upstream_url
+
+
+def upstream_for_link(db, link: str) -> str:
+    """اگر لینک ورودی اختصاصی باشد معادل لینک پنل را برمی‌گرداند، وگرنه خود لینک."""
+    try:
+        base = base_url(db)
+        prefix = f"{base}/s/" if base else ""
+        if not prefix or not str(link).startswith(prefix):
+            return link
+        token = str(link)[len(prefix):].split("?", 1)[0].split("#", 1)[0].strip("/")
+        row = db.ds_get_config_by_token(token)
+        if row is not None and row["subscription_url"]:
+            return row["subscription_url"]
+    except Exception:
+        pass
+    return link
+
+
 # ---------------------------------------------------------------------------
 # برنامه‌ها: ادغام فهرست پیش‌فرض + شخصی‌سازی ادمین
 # ---------------------------------------------------------------------------
