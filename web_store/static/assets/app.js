@@ -297,6 +297,10 @@
     });
     return box;
   }
+  function removeTurnstile(box) {
+    if (window.turnstile && box && box._wid != null) { try { window.turnstile.remove(box._wid); } catch (e) { noop(); } box._wid = null; }
+    ts.token = "";
+  }
   function resetTurnstile(box) {
     ts.token = "";
     if (window.turnstile && box && box._wid != null) { try { window.turnstile.reset(box._wid); } catch (e) { noop(); } }
@@ -740,6 +744,8 @@
       var code = h("input", { class: "input ltr", inputmode: "numeric", autocomplete: "one-time-code", maxlength: "6", placeholder: "123456" });
       var msg = h("div", { "aria-live": "polite" });
       var tsStart = turnstileBox();
+      var tsCur = tsStart;
+      var tsFresh = false;
       var tsVerify = h("div");
       var sendBtn = h("button", { class: "btn ghost block", type: "button", text: t("email_send") });
       var verifyBtn = h("button", { class: "btn block", type: "button", text: t("email_verify") });
@@ -752,12 +758,21 @@
           msg.textContent = "";
           msg.appendChild(alertBox(t("email_sent"), true));
           codeWrap.hidden = false;
-          tsVerify.textContent = "";
-          tsVerify.appendChild(turnstileBox());
+          if (tsCur === tsStart) {
+            removeTurnstile(tsStart);
+            tsStart.remove();
+            tsCur = turnstileBox();
+            tsFresh = true;
+            tsVerify.textContent = "";
+            tsVerify.appendChild(tsCur);
+          }
         }).catch(function (e) {
           msg.textContent = "";
           msg.appendChild(alertBox(e.status ? e.message : t("login_err")));
-        }).then(function () { resetTurnstile(tsStart); sendBtn.disabled = false; });
+        }).then(function () {
+          if (tsFresh) tsFresh = false; else resetTurnstile(tsCur);
+          sendBtn.disabled = false;
+        });
       });
       verifyBtn.addEventListener("click", function () {
         verifyBtn.disabled = true;
@@ -767,6 +782,7 @@
         }).catch(function (e) {
           msg.textContent = "";
           msg.appendChild(alertBox(e.status ? e.message : t("email_bad")));
+          resetTurnstile(tsCur);
           verifyBtn.disabled = false;
         });
       });

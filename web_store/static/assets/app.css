@@ -834,3 +834,13 @@ html { overflow-x: clip; }
 .guide-list { margin: 0; padding-inline-start: 22px; display: grid; gap: 8px; }
 .guide-what p { margin-top: 8px; max-width: 70ch; }
 #sheetBody .app-list { grid-template-columns: 1fr; }
+
+/* Account layout */
+.page.stack { align-content: start; }
+.account-page .acct-hero { align-content: start; }
+.account-page .tabs { width: 100%; align-self: start; align-items: center; justify-content: space-between; border-radius: 16px; padding: 5px; gap: 4px; scrollbar-width: none; }
+.account-page .tabs::-webkit-scrollbar { display: none; }
+.account-page .tabs button { flex: 1 1 auto; min-height: 42px; padding: 0 14px; border-radius: 12px; font-size: 15px; }
+@media (max-width: 480px) {
+  .account-page .tabs button { padding: 0 10px; font-size: 14px; }
+}
