@@ -5817,37 +5817,6 @@ def _panel_server_public(s, health=None) -> dict:
 
 
 # ------------------------------------------------------------ SSH / shared quota
-@app.get("/api/ssh/install-package")
-def api_ssh_install_package(admin=Depends(require_permission("panels")), _fa=Depends(require_full_access_tenant)):
-    """Download only the files needed to turn a separate Debian/Ubuntu host into a ShopVPN SSH node."""
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    rel_files = (
-        "ssh_node_agent.py",
-        "deploy/install-shopvpn-ssh-agent.sh",
-        "deploy/shopvpn-ssh-agent.service",
-        "deploy/shopvpn-sshd@.service",
-    )
-    archive = io.BytesIO()
-    try:
-        with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-            for rel in rel_files:
-                full = os.path.join(project_root, rel)
-                if not os.path.isfile(full):
-                    raise HTTPException(500, f"فایل بسته نصب پیدا نشد: {rel}")
-                zf.write(full, arcname=rel)
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.exception("Could not build SSH node installation package")
-        raise HTTPException(500, "ساخت بسته نصب نود SSH ناموفق بود.") from exc
-    archive.seek(0)
-    db.log_admin_action(admin["id"], "ssh_node_install_package", "Downloaded SSH node installer package", "ssh")
-    return StreamingResponse(archive, media_type="application/zip", headers={
-        "Content-Disposition": 'attachment; filename="ShopVPN-SSH-Node.zip"',
-        "Cache-Control": "no-store",
-    })
-
-
 @app.get("/api/ssh/overview")
 def api_ssh_overview(admin=Depends(require_permission("panels")), _fa=Depends(require_full_access_tenant)):
     pools = db.list_quota_pools(active_only=False)
@@ -5910,22 +5879,6 @@ def api_ssh_delete_node(node_id: int, admin=Depends(require_permission("panels")
     return {"ok": True}
 
 
-@app.post("/api/ssh/nodes")
-def api_ssh_create_node(body: SSHNodeCreateBody, admin=Depends(require_permission("panels")), _fa=Depends(require_full_access_tenant)):
-    name, host, url, env_name = body.name.strip(), body.host.strip(), body.agent_url.strip().rstrip("/"), body.secret_env.strip()
-    if not name or not host or not env_name or not env_name.replace("_", "A").isalnum():
-        raise HTTPException(400, "نام، آدرس نود و نام متغیر محیطی معتبر الزامی هستند.")
-    if not (url.startswith("https://") or (body.allow_insecure_http and url.startswith("http://"))):
-        raise HTTPException(400, "آدرس Agent باید HTTPS باشد؛ HTTP فقط برای شبکه خصوصی و با تأیید صریح مجاز است.")
-    if not 1 <= int(body.port) <= 65535:
-        raise HTTPException(400, "پورت نامعتبر است.")
-    node_id = db.create_ssh_node(name, "linux", host, body.port, auth_type="api_token",
-        username="root", secret_ref=f"env:{env_name}",
-        config_json={"agent_url": url, "allow_insecure_http": bool(body.allow_insecure_http)})
-    db.log_admin_action(admin["id"], "ssh_node_add", f"SSH Linux node #{node_id}: {name}", "ssh")
-    return {"ok": True, "node_id": node_id, "status": "pending", "secret_ref": f"env:{env_name}"}
-
-
 @app.post("/api/ssh/nodes/{node_id}/rename")
 def api_ssh_rename_node(node_id: int, body: SSHNodeRenameBody, admin=Depends(require_permission("panels")), _fa=Depends(require_full_access_tenant)):
     try:
@@ -5981,126 +5934,25 @@ def api_ssh_attach_vpn(pool_id: int, body: SSHAttachVPNBody, admin=Depends(requi
 
 @app.post("/api/ssh/accounts")
 async def api_ssh_create_account(body: SSHAccountCreateBody, admin=Depends(require_permission("panels")), _fa=Depends(require_full_access_tenant)):
-    from ssh_providers import get_ssh_provider, SSHProviderError
-    from quota_reconciler import _env_secret_resolver
-    from datetime import datetime, timedelta, timezone
-    if body.user_id <= 0 or not body.username.strip() or body.limit_gb < 0 or body.days < 0:
-        raise HTTPException(400, "مشخصات حساب SSH نامعتبر است.")
-    if not db.get_user(body.user_id):
-        raise HTTPException(404, "کاربر در دیتابیس این ربات پیدا نشد.")
-    node = next((n for n in db.list_ssh_nodes(active_only=True) if int(n["id"]) == int(body.node_id)), None)
-    if not node:
-        raise HTTPException(400, "نود فعال پیدا نشد؛ ابتدا اتصال نود را تست کنید.")
-    pool = None
-    if body.quota_pool_id is not None:
-        pool = db.get_quota_pool(body.quota_pool_id)
-        if not pool or int(pool["user_id"]) != int(body.user_id) or pool["status"] != "active":
-            raise HTTPException(400, "استخر سهمیه فعال نیست یا متعلق به این کاربر نیست.")
-    expires_at = body.expires_at
-    if pool:
-        # Shared pool owns the authoritative expiry; local per-account expiry must match it.
-        expires_at = pool.get("expires_at") or expires_at
-        limit_bytes = 0
-    else:
-        if not expires_at and body.days:
-            expires_at = (datetime.now(timezone.utc) + timedelta(days=body.days)).isoformat()
-        limit_bytes = int(float(body.limit_gb) * (1024 ** 3))
-    if expires_at:
-        from db.usage import _normalize_timestamp
-        try:
-            expires_at = _normalize_timestamp(expires_at)
-        except ValueError as exc:
-            raise HTTPException(400, str(exc))
-    provider = get_ssh_provider(node, secret_resolver=_env_secret_resolver)
-    from ssh_credentials import encrypt_credential
-    # Fail before making a remote account if secure credential storage is not configured.
+    import ssh_service
     try:
-        encrypt_credential("preflight-check")
-    except RuntimeError as exc:
-        raise HTTPException(500, str(exc))
-    try:
-        result = await provider.create_account(body.username.strip(), limit_bytes, expires_at)
-        row_id = None
-        try:
-            usage = await provider.get_usage(result.account_id)
-            reliable_sources = {"nftables_port_counters", "external-counter", "ssh-traffic-accountant"}
-            volume_limited = limit_bytes > 0 or bool(pool and int(pool.get("limit_bytes") or 0) > 0)
-            if volume_limited and (not usage.get("accounting_ready") or usage.get("source") not in reliable_sources):
-                raise HTTPException(409, "حساب ساخته نشد: برای سهمیه حجمی باید شمارنده‌ی دوطرفه‌ی معتبر SSH فعال باشد.")
-            credential_enc = encrypt_credential(result.metadata.get("password", ""))
-            row_id = db.register_ssh_account(body.node_id, body.user_id, result.account_id,
-                result.username, result.host, result.port, body.quota_pool_id, expires_at, credential_enc)
-            if usage.get("accounting_ready"):
-                db.record_usage_snapshot("ssh", result.account_id, int(usage["used_bytes"]),
-                    uploaded_bytes=usage.get("uploaded_bytes", 0), downloaded_bytes=usage.get("downloaded_bytes", 0),
-                    source=str(usage.get("source") or "ssh-agent"), reported_at=usage.get("reported_at"))
-        except Exception:
-            if row_id is not None:
-                db.delete_ssh_account_record(row_id)
-            try:
-                await provider.delete_account(result.account_id)
-            except Exception:
-                logger.exception("Failed to roll back SSH account on node %s", body.node_id)
-            raise
-    except (ValueError, SSHProviderError) as exc:
-        raise HTTPException(400, str(exc)[:300])
-    db.log_admin_action(admin["id"], "ssh_account_create", f"SSH account #{row_id} for user {body.user_id}", "ssh")
-    return {"ok": True, "id": row_id, "account_id": result.account_id, "username": result.username,
-            "host": result.host, "port": result.port, "password": result.metadata.get("password"),
-            "expires_at": expires_at, "quota_pool_id": body.quota_pool_id,
-            "accounting_ready": bool(usage.get("accounting_ready")),
-            "warning": (None if usage.get("source") in {"nftables_port_counters", "external-counter", "ssh-traffic-accountant"}
-                        else "شمارنده‌ی مصرف معتبر فعال نیست؛ سهمیه حجمی روی این حساب قابل تضمین نیست")}
+        r = await ssh_service.create_account(db, node_id=body.node_id, user_id=body.user_id, username=body.username,
+            limit_gb=body.limit_gb, days=body.days, expires_at=body.expires_at, quota_pool_id=body.quota_pool_id)
+    except ssh_service.SSHServiceError as exc:
+        raise HTTPException(exc.status, str(exc))
+    db.log_admin_action(admin["id"], "ssh_account_create", f"SSH account #{r['id']} for user {body.user_id}", "ssh")
+    return r
 
 
 @app.post("/api/ssh/accounts/{account_id}/action")
 async def api_ssh_account_action(account_id: str, body: SSHAccountActionBody, admin=Depends(require_permission("panels")), _fa=Depends(require_full_access_tenant)):
-    from ssh_providers import get_ssh_provider, SSHProviderError
-    from quota_reconciler import _env_secret_resolver
-    action = body.action.strip().lower()
-    if action not in {"enable", "disable", "delete"}:
-        raise HTTPException(400, "عملیات نامعتبر است.")
-    account = next((a for a in db.list_ssh_accounts() if str(a["account_id"]) == str(account_id)), None)
-    if not account:
-        raise HTTPException(404, "حساب SSH پیدا نشد.")
-    node = next((n for n in db.list_ssh_nodes() if int(n["id"]) == int(account["node_id"])), None)
-    if not node:
-        raise HTTPException(404, "نود حساب پیدا نشد.")
+    import ssh_service
     try:
-        provider = get_ssh_provider(node, secret_resolver=_env_secret_resolver)
-        if action == "enable":
-            await provider.set_account_enabled(account_id, True)
-            db.set_ssh_account_status(account["id"], "active")
-            if account.get("quota_pool_id"):
-                db.set_quota_enforcement_state(int(account["quota_pool_id"]), "ssh", account_id,
-                    is_disabled=False, reason="manual_enabled", last_error=None)
-        elif action == "disable":
-            await provider.set_account_enabled(account_id, False)
-            db.set_ssh_account_status(account["id"], "disabled")
-            if account.get("quota_pool_id"):
-                db.set_quota_enforcement_state(int(account["quota_pool_id"]), "ssh", account_id,
-                    is_disabled=False, reason="manual_disabled", last_error=None)
-        else:
-            pool_id = account.get("quota_pool_id")
-            if pool_id:
-                usage = await provider.get_usage(account_id)
-                pool = db.get_quota_pool(int(pool_id))
-                if pool and int(pool.get("limit_bytes") or 0) > 0 and not usage.get("accounting_ready"):
-                    raise HTTPException(409, "برای حذف از استخر حجمی مشترک، اول حسابداری مصرف SSH را معتبر کنید؛ در غیر این صورت مصرف تاریخی از دست می‌رود.")
-                if usage.get("accounting_ready"):
-                    db.record_usage_snapshot("ssh", account_id, int(usage["used_bytes"]),
-                        uploaded_bytes=usage.get("uploaded_bytes", 0), downloaded_bytes=usage.get("downloaded_bytes", 0),
-                        source=str(usage.get("source") or "ssh-agent"), reported_at=usage.get("reported_at"))
-            await provider.delete_account(account_id)
-            if pool_id:
-                db.detach_quota_service(int(pool_id), "ssh", account_id)
-            db.set_ssh_account_status(account["id"], "deleted")
-    except HTTPException:
-        raise
-    except SSHProviderError as exc:
-        raise HTTPException(400, str(exc)[:300])
-    db.log_admin_action(admin["id"], f"ssh_account_{action}", f"SSH account {account_id}", "ssh")
-    return {"ok": True, "account_id": account_id, "status": "deleted" if action == "delete" else ("active" if action == "enable" else "disabled")}
+        status = await ssh_service.account_action(db, account_id, body.action)
+    except ssh_service.SSHServiceError as exc:
+        raise HTTPException(exc.status, str(exc))
+    db.log_admin_action(admin["id"], f"ssh_account_{body.action.strip().lower()}", f"SSH account {account_id}", "ssh")
+    return {"ok": True, "account_id": account_id, "status": status}
 
 
 @app.post("/api/ssh/reconcile-once")
