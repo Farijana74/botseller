@@ -294,7 +294,7 @@ async def sub_endpoint(request: Request) -> Response:
         uris = ds.extract_uris(up.body) if ok else []
         if ok:
             # حساب‌های SSH متصل به همین سرویس را در صفحه‌ی اشتراک هم نشان بده.
-            uris.extend(await asyncio.to_thread(ds.ssh_uris_for_config, db, cc["id"]))
+            uris.extend(await asyncio.to_thread(ds.ssh_uris_for_config, db, cc["id"], cc))
         if ok and up.fresh:
             await _snapshot_usage(cc, up.headers)
         series = None
@@ -324,7 +324,7 @@ async def sub_endpoint(request: Request) -> Response:
             f"{key}={int(pool_info.get(key) or 0)}"
             for key in ("upload", "download", "total", "expire") if key in pool_info
         )
-    extra_uris = await asyncio.to_thread(ds.ssh_uris_for_config, db, cc["id"])
+    extra_uris = await asyncio.to_thread(ds.ssh_uris_for_config, db, cc["id"], cc)
     reply = ds.compose_client_reply(up.status, up.headers, up.body, cc, settings, brand, page_url,
                                     extra_uris=extra_uris)
     if reply is None:
@@ -376,7 +376,7 @@ async def qr_endpoint(request: Request) -> Response:
             return PlainTextResponse("Upstream unavailable", status_code=502)
         uris = ds.extract_uris(up.body) if up.status == 200 else []
         if up.status == 200:
-            uris.extend(await asyncio.to_thread(ds.ssh_uris_for_config, db, cc["id"]))
+            uris.extend(await asyncio.to_thread(ds.ssh_uris_for_config, db, cc["id"], cc))
         if not 0 <= n < min(len(uris), 60):
             return _not_found()
         text = uris[n]
