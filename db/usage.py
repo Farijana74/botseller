@@ -163,6 +163,20 @@ class UsageMixin:
             conn.execute("DELETE FROM ssh_accounts WHERE id=?", (int(account_row_id),))
             return True
 
+    def link_ssh_account_to_config(self, account_id: str, custom_config_id: int) -> bool:
+        with self._get_conn() as conn:
+            cur = conn.execute("UPDATE ssh_accounts SET custom_config_id=? WHERE account_id=?",
+                               (int(custom_config_id), str(account_id)))
+            return bool(cur.rowcount)
+
+    def ssh_accounts_for_config(self, custom_config_id: int) -> list:
+        with self._get_conn() as conn:
+            rows = conn.execute(
+                "SELECT a.account_id,a.username,a.host,a.port,a.credential_enc,n.name AS node_name FROM ssh_accounts a "
+                "JOIN ssh_nodes n ON n.id=a.node_id WHERE a.custom_config_id=? AND a.status='active' ORDER BY a.id", (int(custom_config_id),)
+            ).fetchall()
+            return [dict(r) for r in rows]
+
     def get_ssh_account_credential(self, account_id: str, user_id: int = None):
         """Return encrypted credential only for the exact account owner when requested."""
         sql = "SELECT credential_enc FROM ssh_accounts WHERE account_id=?"
@@ -339,6 +353,15 @@ class UsageMixin:
         with self._get_conn() as conn:
             sql = "SELECT * FROM ssh_nodes" + (" WHERE status='active'" if active_only else "") + " ORDER BY id DESC"
             return [dict(r) for r in conn.execute(sql).fetchall()]
+
+    def update_ssh_node_name(self, node_id: int, name: str) -> bool:
+        name = str(name or "").strip()
+        if not name or len(name) > 80:
+            raise ValueError("نام نود باید بین ۱ تا ۸۰ کاراکتر باشد")
+        with self._get_conn() as conn:
+            cur = conn.execute("UPDATE ssh_nodes SET name=?,updated_at=? WHERE id=?",
+                               (name, datetime.now(timezone.utc).isoformat(), int(node_id)))
+            return cur.rowcount > 0
 
     def delete_ssh_node(self, node_id: int) -> bool:
         """حذف نود؛ فقط وقتی هیچ حساب غیرحذف‌شده‌ای روی آن نیست و هیچ محصولی به آن وصل نیست."""
