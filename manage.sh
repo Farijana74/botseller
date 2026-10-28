@@ -159,8 +159,10 @@ MSG_EN[sec_setup]="BOT SETUP"
 MSG_FA[sec_setup]="نصب و به‌روزرسانی"
 MSG_EN[sec_service]="SERVICE CONTROL"
 MSG_FA[sec_service]="کنترل سرویس"
-MSG_EN[sec_store]="STORE & CONFIG"
-MSG_FA[sec_store]="فروشگاه و تنظیمات"
+MSG_EN[sec_store]="STATS & CONFIG"
+MSG_FA[sec_store]="آمار و تنظیمات"
+MSG_EN[sec_webstore]="WEB SHOP"
+MSG_FA[sec_webstore]="فروشگاه وب"
 MSG_EN[sec_miniapp]="MINI APP"
 MSG_FA[sec_miniapp]="مینی‌اپ"
 MSG_EN[sec_panel]="ADMIN PANEL"
@@ -241,8 +243,8 @@ MSG_EN[update_bot_header]="Updating Bot"
 MSG_FA[update_bot_header]="آپدیت بات"
 MSG_EN[update_done]="✅ Bot updated."
 MSG_FA[update_done]="✅ آپدیت بات انجام شد."
-MSG_EN[miniapp_not_installed]="⛔️ Mini App not installed yet. Run option 13 (setup Mini App) first."
-MSG_FA[miniapp_not_installed]="⛔️ مینی‌اپ هنوز نصب نشده. اول گزینه ۱۳ (نصب/تنظیم مینی‌اپ) را بزن."
+MSG_EN[miniapp_not_installed]="⛔️ Mini App not installed yet. Run option 15 (setup Mini App) first."
+MSG_FA[miniapp_not_installed]="⛔️ مینی‌اپ هنوز نصب نشده. اول گزینه ۱۵ (نصب/تنظیم مینی‌اپ) را بزن."
 MSG_EN[restarting_miniapp_service]="♻️ Restarting Mini App service"
 MSG_FA[restarting_miniapp_service]="♻️ ری‌استارت سرویس مینی‌اپ"
 MSG_EN[update_miniapp_header]="Updating Mini App"
@@ -383,8 +385,8 @@ MSG_EN[prompt_password]="Password (min 8 characters): "
 MSG_FA[prompt_password]="پسورد (حداقل ۸ کاراکتر): "
 
 # change_admin_panel_credentials
-MSG_EN[no_panel_admins_found]="⛔️ No admin panel accounts found yet. Run option 16 (setup admin panel) first."
-MSG_FA[no_panel_admins_found]="⛔️ هنوز هیچ حساب پنلی ساخته نشده. اول گزینه ۱۶ (نصب/تنظیم پنل مدیریت) را بزن."
+MSG_EN[no_panel_admins_found]="⛔️ No admin panel accounts found yet. Run option 18 (setup admin panel) first."
+MSG_FA[no_panel_admins_found]="⛔️ هنوز هیچ حساب پنلی ساخته نشده. اول گزینه ۱۸ (نصب/تنظیم پنل مدیریت) را بزن."
 MSG_EN[existing_admins_header]="👤 Existing panel accounts:"
 MSG_FA[existing_admins_header]="👤 حساب‌های موجود پنل:"
 MSG_EN[prompt_current_username]="Current username: "
@@ -405,8 +407,8 @@ MSG_EN[miniapp_removed]="✅ Mini App removed."
 MSG_FA[miniapp_removed]="✅ مینی‌اپ حذف شد."
 
 # update_admin_panel / remove_admin_panel
-MSG_EN[panel_not_installed_yet]="⛔️ Admin panel not installed yet. Run option 16 (setup admin panel) first."
-MSG_FA[panel_not_installed_yet]="⛔️ پنل مدیریت هنوز نصب نشده. اول گزینه ۱۶ (نصب/تنظیم پنل مدیریت) را بزن."
+MSG_EN[panel_not_installed_yet]="⛔️ Admin panel not installed yet. Run option 18 (setup admin panel) first."
+MSG_FA[panel_not_installed_yet]="⛔️ پنل مدیریت هنوز نصب نشده. اول گزینه ۱۸ (نصب/تنظیم پنل مدیریت) را بزن."
 MSG_EN[restarting_panel_service]="♻️ Restarting admin panel service"
 MSG_FA[restarting_panel_service]="♻️ ری‌استارت سرویس پنل مدیریت"
 MSG_EN[update_panel_header]="Updating Admin Panel"
@@ -439,8 +441,8 @@ MSG_EN[vapid_saved]="✅ VAPID keys generated and saved to .env."
 MSG_FA[vapid_saved]="✅ کلیدهای VAPID ساخته و در .env ذخیره شدند."
 MSG_EN[panel_restarted_hint]="✅ Service restarted. Now log into the panel and click \"Enable\" notifications."
 MSG_FA[panel_restarted_hint]="✅ سرویس ری‌استارت شد. حالا وارد پنل شو و روی «فعال‌سازی» اعلان بزن."
-MSG_EN[panel_not_installed_vapid_hint]="Admin panel not installed yet. These keys will be used automatically once installed (option 16)."
-MSG_FA[panel_not_installed_vapid_hint]="پنل مدیریت هنوز نصب نشده. بعد از نصب (گزینه ۱۶) این کلیدها خودکار استفاده می‌شوند."
+MSG_EN[panel_not_installed_vapid_hint]="Admin panel not installed yet. These keys will be used automatically once installed (option 18)."
+MSG_FA[panel_not_installed_vapid_hint]="پنل مدیریت هنوز نصب نشده. بعد از نصب (گزینه ۱۸) این کلیدها خودکار استفاده می‌شوند."
 
 # setup_api / update_api / remove_api
 MSG_EN[api_dir_missing]="⛔️ api folder not found. Update the project code first (option 2)."
@@ -453,8 +455,8 @@ MSG_EN[api_ready]="✅ Integration API is ready: %s"
 MSG_FA[api_ready]="✅ API یکپارچه‌سازی آماده است: %s"
 MSG_EN[api_token_hint]="Create a token by sending /token2 to the admin bot. Docs: /api/index.html and /api/docs. Access log: logs/api_access.log"
 MSG_FA[api_token_hint]="برای ساخت توکن در بات ادمین دستور /token2 را بفرست. مستندات: /api/index.html و /api/docs. لاگ دسترسی: logs/api_access.log"
-MSG_EN[api_not_installed]="⛔️ Integration API not installed yet. Run option 24 (setup integration API) first."
-MSG_FA[api_not_installed]="⛔️ API یکپارچه‌سازی هنوز نصب نشده. اول گزینه ۲۴ (نصب/تنظیم API یکپارچه‌سازی) را بزن."
+MSG_EN[api_not_installed]="⛔️ Integration API not installed yet. Run option 26 (setup integration API) first."
+MSG_FA[api_not_installed]="⛔️ API یکپارچه‌سازی هنوز نصب نشده. اول گزینه ۲۶ (نصب/تنظیم API یکپارچه‌سازی) را بزن."
 MSG_EN[restarting_api_service]="♻️ Restarting integration API service"
 MSG_FA[restarting_api_service]="♻️ ری‌استارت سرویس API یکپارچه‌سازی"
 MSG_EN[update_api_header]="Updating Integration API"
@@ -497,8 +499,8 @@ MSG_EN[dsub_enable_ask]="Turn the dedicated sub ON now? (Y/n): "
 MSG_FA[dsub_enable_ask]="ساب اختصاصی همین الان روشن شود؟ (Y/n): "
 MSG_EN[dsub_hint]="All other settings (page design, texts, apps, headers) are in the Telegram bot: Admin panel → Dedicated Sub."
 MSG_FA[dsub_hint]="بقیه‌ی تنظیمات (طراحی صفحه، متن‌ها، برنامه‌ها، هدرها) داخل بات تلگرام است: پنل مدیریت ← ساب اختصاصی."
-MSG_EN[dsub_not_installed]="⛔️ Dedicated sub server not installed yet. Run option 27 first."
-MSG_FA[dsub_not_installed]="⛔️ سرور ساب اختصاصی هنوز نصب نشده. اول گزینه ۲۷ را بزن."
+MSG_EN[dsub_not_installed]="⛔️ Dedicated sub server not installed yet. Run option 29 first."
+MSG_FA[dsub_not_installed]="⛔️ سرور ساب اختصاصی هنوز نصب نشده. اول گزینه ۲۹ را بزن."
 MSG_EN[dsub_state]="Dedicated sub is currently: %s"
 MSG_FA[dsub_state]="وضعیت فعلی ساب اختصاصی: %s"
 MSG_EN[dsub_toggle_prompt]="1) Turn ON   2) Turn OFF   (Enter = cancel): "
@@ -541,8 +543,8 @@ MSG_EN[panel_proxy_removed]="✅ VPN panel proxy removed."
 MSG_FA[panel_proxy_removed]="✅ پروکسی پنل VPN حذف شد."
 MSG_EN[panel_proxy_list_header]="📋 Panel/config proxies set up with this menu:"
 MSG_FA[panel_proxy_list_header]="📋 پروکسی‌های پنل/کانفیگی که با این منو ساخته شده‌اند:"
-MSG_EN[panel_proxy_list_empty]="No panel proxy has been set up with option 20 yet."
-MSG_FA[panel_proxy_list_empty]="هنوز هیچ پروکسی پنلی با گزینه ۲۰ ساخته نشده."
+MSG_EN[panel_proxy_list_empty]="No panel proxy has been set up with option 22 yet."
+MSG_FA[panel_proxy_list_empty]="هنوز هیچ پروکسی پنلی با گزینه ۲۲ ساخته نشده."
 MSG_EN[panel_proxy_list_enabled]="enabled"
 MSG_FA[panel_proxy_list_enabled]="فعال"
 MSG_EN[panel_proxy_list_disabled]="disabled"
@@ -724,8 +726,8 @@ MSG_EN[menu_lang]="Language / زبان (English ⇄ فارسی)"
 MSG_FA[menu_lang]="Language / زبان (English ⇄ فارسی)"
 MSG_EN[ws_need_miniapp]="The web shop service files or venv are missing. Update the project and reinstall packages first."
 MSG_FA[ws_need_miniapp]="فایل‌های سرویس فروشگاه وب یا venv پیدا نشد. ابتدا پروژه را به‌روزرسانی و پکیج‌ها را نصب کن."
-MSG_EN[ws_miniapp_inactive]="The Mini App service is not active. Run option 13 first."
-MSG_FA[ws_miniapp_inactive]="سرویس مینی‌اپ فعال نیست. ابتدا گزینه ۱۳ را اجرا کن."
+MSG_EN[ws_miniapp_inactive]="The Mini App service is not active. Run option 15 first."
+MSG_FA[ws_miniapp_inactive]="سرویس مینی‌اپ فعال نیست. ابتدا گزینه ۱۵ را اجرا کن."
 MSG_EN[ws_domain_prompt]="Web shop domain (e.g. shop.example.com; its A record must point to this server's IP): "
 MSG_FA[ws_domain_prompt]="دامنه فروشگاه (مثلاً shop.example.com؛ رکورد A باید به IP همین سرور اشاره کند): "
 MSG_EN[ws_domain_invalid]="Invalid domain."
@@ -751,8 +753,20 @@ MSG_FA[ws_ready]="فروشگاه وب آماده است: https://%s/"
 MSG_EN[ws_ports_hint]="Make sure ports 80 and 443 are open in your firewall / provider panel."
 MSG_EN[menu_store_status]="Web shop status"
 MSG_FA[menu_store_status]="وضعیت فروشگاه وب"
-MSG_EN[menu_store_remove]="Remove web shop domain (SSL kept)"
-MSG_FA[menu_store_remove]="حذف دامنه فروشگاه وب (SSL نگه داشته می‌شود)"
+MSG_EN[menu_store_remove]="Remove web shop (service + nginx, SSL kept)"
+MSG_FA[menu_store_remove]="حذف فروشگاه وب (سرویس + nginx، SSL نگه داشته می‌شود)"
+MSG_EN[menu_store_update]="Update web shop"
+MSG_FA[menu_store_update]="آپدیت فروشگاه وب"
+MSG_EN[lbl_store]="Web Shop"
+MSG_FA[lbl_store]="فروشگاه وب"
+MSG_EN[store_not_installed]="⛔️ Web shop not installed yet. Run option 10 (setup web shop) first."
+MSG_FA[store_not_installed]="⛔️ فروشگاه وب هنوز نصب نشده. اول گزینه ۱۰ (راه‌اندازی فروشگاه وب) را بزن."
+MSG_EN[restarting_store_service]="♻️ Restarting web shop service"
+MSG_FA[restarting_store_service]="♻️ ری‌استارت سرویس فروشگاه وب"
+MSG_EN[update_store_header]="Updating Web Shop"
+MSG_FA[update_store_header]="آپدیت فروشگاه وب"
+MSG_EN[store_update_done]="✅ Web shop updated."
+MSG_FA[store_update_done]="✅ آپدیت فروشگاه وب انجام شد."
 MSG_EN[ws_status_none]="No web shop domain is configured."
 MSG_FA[ws_status_none]="هیچ دامنه‌ی فروشگاه وبی تنظیم نشده است."
 MSG_EN[ws_status_title]="Web shop status"
@@ -816,8 +830,8 @@ MSG_EN[ts_saved]="Turnstile settings saved. Check a test purchase and an email-c
 MSG_FA[ts_saved]="تنظیمات Turnstile ذخیره شد. یک خرید آزمایشی و درخواست کد ایمیل را بررسی کن."
 MSG_EN[menu_0]="Exit"
 MSG_FA[menu_0]="خروج"
-MSG_EN[enter_choice_prompt]="Enter choice [0-38, L]: "
-MSG_FA[enter_choice_prompt]="یک گزینه انتخاب کن [0-38, L]: "
+MSG_EN[enter_choice_prompt]="Enter choice [0-40, L]: "
+MSG_FA[enter_choice_prompt]="یک گزینه انتخاب کن [0-40, L]: "
 MSG_EN[invalid_choice]="Invalid option."
 MSG_FA[invalid_choice]="گزینه نامعتبر است."
 MSG_EN[goodbye]="Goodbye 👋"
@@ -949,6 +963,7 @@ print_status_line() {
     status_row lbl_panel "$(unit_state "${SERVICE_NAME}-adminpanel")"
     status_row lbl_api "$(unit_state "${SERVICE_NAME}-api")"
     status_row lbl_dsub "$(unit_state "${SERVICE_NAME}-sub")"
+    status_row lbl_store "$(unit_state "${SERVICE_NAME}-store")"
     echo ""
 }
 
@@ -1259,17 +1274,20 @@ update_bot() {
     PANEL_SERVICE="${SERVICE_NAME}-adminpanel"
     API_SERVICE="${SERVICE_NAME}-api"
     DSUB_SERVICE="${SERVICE_NAME}-sub"
-    local has_miniapp=0 has_panel=0 has_api=0 has_dsub=0
+    STORE_SERVICE="${SERVICE_NAME}-store"
+    local has_miniapp=0 has_panel=0 has_api=0 has_dsub=0 has_store=0
     systemctl list-units --full -all | grep -q "${MINIAPP_SERVICE}.service" && has_miniapp=1
     systemctl list-units --full -all | grep -q "${PANEL_SERVICE}.service" && has_panel=1
     systemctl list-units --full -all | grep -q "${API_SERVICE}.service" && has_api=1
     systemctl list-units --full -all | grep -q "${DSUB_SERVICE}.service" && has_dsub=1
+    systemctl list-units --full -all | grep -q "${STORE_SERVICE}.service" && has_store=1
 
     local total=3
     [ "$has_miniapp" = "1" ] && total=$((total+1))
     [ "$has_panel" = "1" ] && total=$((total+1))
     [ "$has_api" = "1" ] && total=$((total+1))
     [ "$has_dsub" = "1" ] && total=$((total+1))
+    [ "$has_store" = "1" ] && total=$((total+1))
     local step=0 failed=0
 
     section_header "$(t update_bot_header)"
@@ -1301,6 +1319,11 @@ update_bot() {
     if [ "$has_dsub" = "1" ]; then
         step=$((step+1))
         run_step_live "$step" "$total" "$(t restarting_dsub_service)" bash -c "sudo systemctl restart '$DSUB_SERVICE' && sleep 2" || failed=1
+    fi
+
+    if [ "$has_store" = "1" ]; then
+        step=$((step+1))
+        run_step_live "$step" "$total" "$(t restarting_store_service)" bash -c "sudo systemctl restart '$STORE_SERVICE' && sleep 2" || failed=1
     fi
 
     draw_rule
@@ -1408,7 +1431,7 @@ factory_reset() {
     fi
 
     cd "$HOME" || cd /
-    for unit in "$SERVICE_NAME" "${SERVICE_NAME}-miniapp" "${SERVICE_NAME}-adminpanel" "${SERVICE_NAME}-api" "${SERVICE_NAME}-sub" "$LIBRETRANSLATE_SERVICE"; do
+    for unit in "$SERVICE_NAME" "${SERVICE_NAME}-miniapp" "${SERVICE_NAME}-adminpanel" "${SERVICE_NAME}-api" "${SERVICE_NAME}-sub" "${SERVICE_NAME}-store" "$LIBRETRANSLATE_SERVICE"; do
         sudo systemctl stop "$unit" >/dev/null 2>&1 || true
         sudo systemctl disable "$unit" >/dev/null 2>&1 || true
         sudo rm -f "/etc/systemd/system/${unit}.service"
@@ -1569,12 +1592,12 @@ edit_env() {
     [ -n "$NEW_OWNER" ] && set_env_key OWNER_ID "$NEW_OWNER"
 
     echo -e "${GREEN}$(t saved_restarting)${RESET}"
-    for unit in "$SERVICE_NAME" "${SERVICE_NAME}-miniapp" "${SERVICE_NAME}-adminpanel" "${SERVICE_NAME}-api" "${SERVICE_NAME}-sub"; do
+    for unit in "$SERVICE_NAME" "${SERVICE_NAME}-miniapp" "${SERVICE_NAME}-adminpanel" "${SERVICE_NAME}-api" "${SERVICE_NAME}-sub" "${SERVICE_NAME}-store"; do
         [ -f "/etc/systemd/system/${unit}.service" ] || continue
         sudo systemctl restart "$unit"
     done
     sleep 3
-    for unit in "$SERVICE_NAME" "${SERVICE_NAME}-miniapp" "${SERVICE_NAME}-adminpanel" "${SERVICE_NAME}-api" "${SERVICE_NAME}-sub"; do
+    for unit in "$SERVICE_NAME" "${SERVICE_NAME}-miniapp" "${SERVICE_NAME}-adminpanel" "${SERVICE_NAME}-api" "${SERVICE_NAME}-sub" "${SERVICE_NAME}-store"; do
         [ -f "/etc/systemd/system/${unit}.service" ] || continue
         if ! systemctl is-active --quiet "$unit"; then
             failed=1
@@ -2224,8 +2247,8 @@ remove_panel_proxy() {
 }
 
 # ---------------------------------------------------------------------------
-# Action: list all panel/config domain proxies set up via option 20
-# عملیات: نمایش لیست پروکسی‌های دامنه‌ای که با گزینه ۲۰ ساخته شده‌اند
+# Action: list all panel/config domain proxies set up via option 22
+# عملیات: نمایش لیست پروکسی‌های دامنه‌ای که با گزینه ۲۲ ساخته شده‌اند
 # ---------------------------------------------------------------------------
 list_panel_proxies() {
     local found=0
@@ -3411,8 +3434,45 @@ remove_web_store() {
     sudo rm -f "/etc/nginx/sites-enabled/shopvpn-store-${DOMAIN}.conf" "/etc/nginx/sites-available/shopvpn-store-${DOMAIN}.conf"
     sudo systemctl reload nginx 2>/dev/null || true
 
+    mapfile -t DOMAINS < <(web_store_domains)
+    if [ "${#DOMAINS[@]}" -eq 0 ]; then
+        sudo systemctl stop "${SERVICE_NAME}-store" 2>/dev/null || true
+        sudo systemctl disable "${SERVICE_NAME}-store" 2>/dev/null || true
+        sudo rm -f "/etc/systemd/system/${SERVICE_NAME}-store.service"
+        sudo systemctl daemon-reload
+    fi
+
     sudo systemctl restart "$SERVICE_NAME" >/dev/null 2>&1 || true
     echo -e "${GREEN}$(t ws_removed "$DOMAIN")${RESET}"
+}
+
+# ---------------------------------------------------------------------------
+# Action: update web shop / عملیات: آپدیت فروشگاه وب
+# ---------------------------------------------------------------------------
+update_web_store() {
+    local STORE_SERVICE="${SERVICE_NAME}-store"
+    if ! systemctl list-units --full -all | grep -q "${STORE_SERVICE}.service"; then
+        echo -e "${RED}$(t store_not_installed)${RESET}"
+        return
+    fi
+    if [ ! -f "$INSTALL_DIR/main.py" ]; then
+        echo -e "${RED}$(t bot_not_installed)${RESET}"
+        return
+    fi
+    cd "$INSTALL_DIR"
+
+    local failed=0
+    section_header "$(t update_store_header)"
+    run_step_live 1 3 "$(t fetching_latest)" fetch_project_code "$INSTALL_DIR" || failed=1
+    run_step_live 2 3 "$(t updating_packages)" bash -c "source '$INSTALL_DIR/venv/bin/activate' && pip install -r requirements.txt --quiet && deactivate" || failed=1
+    run_step_live 3 3 "$(t restarting_store_service)" bash -c "sudo systemctl restart '$STORE_SERVICE' && sleep 2" || failed=1
+
+    draw_rule
+    if [ "$failed" = "0" ] && systemctl is-active --quiet "$STORE_SERVICE"; then
+        echo -e "  ${GREEN}${BOLD}$(t store_update_done)${RESET}"
+    else
+        echo -e "  ${RED}$(t install_failed "$STORE_SERVICE")${RESET}"
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -3434,44 +3494,46 @@ while true; do
     menu_section sec_store
     menu_item 8 menu_8
     menu_item 9 menu_9
+    menu_section sec_webstore
     menu_item 10 menu_34
-    menu_item 11 menu_35
-    menu_item 12 menu_36
-    menu_item R menu_store_remove "$RED"
+    menu_item 11 menu_store_remove "$RED"
+    menu_item 12 menu_store_update
+    menu_item 13 menu_35
+    menu_item 14 menu_36
     menu_section sec_miniapp
-    menu_item 13 menu_10
-    menu_item 14 menu_11 "$RED"
-    menu_item 15 menu_12
+    menu_item 15 menu_10
+    menu_item 16 menu_11 "$RED"
+    menu_item 17 menu_12
     menu_section sec_panel
-    menu_item 16 menu_13
-    menu_item 17 menu_14 "$RED"
-    menu_item 18 menu_15
-    menu_item 19 menu_16
+    menu_item 18 menu_13
+    menu_item 19 menu_14 "$RED"
+    menu_item 20 menu_15
+    menu_item 21 menu_16
     menu_section sec_domains
-    menu_item 20 menu_17
-    menu_item 21 menu_18
-    menu_item 22 menu_19 "$RED"
-    menu_item 23 menu_20
+    menu_item 22 menu_17
+    menu_item 23 menu_18
+    menu_item 24 menu_19 "$RED"
+    menu_item 25 menu_20
     menu_section sec_api
-    menu_item 24 menu_24
-    menu_item 25 menu_25 "$RED"
-    menu_item 26 menu_26
+    menu_item 26 menu_24
+    menu_item 27 menu_25 "$RED"
+    menu_item 28 menu_26
     menu_section sec_dsub
-    menu_item 27 menu_37
-    menu_item 28 menu_38
-    menu_item 29 menu_39
-    menu_item 30 menu_40 "$RED"
+    menu_item 29 menu_37
+    menu_item 30 menu_38
+    menu_item 31 menu_39
+    menu_item 32 menu_40 "$RED"
     menu_section sec_translation
-    menu_item 31 menu_27
-    menu_item 32 menu_28 "$RED"
-    menu_item 33 menu_30 "$RED"
-    menu_item 34 menu_29 "$RED"
+    menu_item 33 menu_27
+    menu_item 34 menu_28 "$RED"
+    menu_item 35 menu_30 "$RED"
+    menu_item 36 menu_29 "$RED"
     menu_section sec_advanced
-    menu_item 35 menu_21
-    menu_item 36 menu_22
-    menu_item 37 menu_23
+    menu_item 37 menu_21
+    menu_item 38 menu_22
+    menu_item 39 menu_23
     menu_section sec_userbot
-    menu_item 38 menu_33
+    menu_item 40 menu_33
     draw_rule
     menu_item L menu_lang "$MAGENTA"
     menu_item 0 menu_0 "$DIM"
@@ -3490,36 +3552,37 @@ while true; do
         8) show_stats; pause ;;
         9) edit_env; pause ;;
         10) setup_web_store; pause ;;
-        11) setup_email_service; pause ;;
-        12) setup_web_turnstile; pause ;;
-        13) setup_miniapp; pause ;;
-        14) remove_miniapp; pause ;;
-        15) update_miniapp; pause ;;
-        16) setup_admin_panel; pause ;;
-        17) remove_admin_panel; pause ;;
-        18) update_admin_panel; pause ;;
-        19) setup_vapid_keys; pause ;;
-        20) setup_panel_proxy; pause ;;
-        21) list_panel_proxies; pause ;;
-        22) remove_panel_proxy; pause ;;
-        23) list_service_domains; pause ;;
-        24) setup_api; pause ;;
-        25) remove_api; pause ;;
-        26) update_api; pause ;;
-        27) setup_dedicated_sub; pause ;;
-        28) toggle_dedicated_sub; pause ;;
-        29) update_dedicated_sub; pause ;;
-        30) remove_dedicated_sub; pause ;;
-        31) setup_libretranslate; pause ;;
-        32) remove_libretranslate; pause ;;
-        33) remove_translation_languages; pause ;;
-        34) factory_reset; pause ;;
-        35) restore_backup_cli; pause ;;
-        36) setup_bot_mode; pause ;;
-        37) change_admin_panel_credentials; pause ;;
-        38) telegram_accounts_menu ;;
+        11) remove_web_store; pause ;;
+        12) update_web_store; pause ;;
+        13) setup_email_service; pause ;;
+        14) setup_web_turnstile; pause ;;
+        15) setup_miniapp; pause ;;
+        16) remove_miniapp; pause ;;
+        17) update_miniapp; pause ;;
+        18) setup_admin_panel; pause ;;
+        19) remove_admin_panel; pause ;;
+        20) update_admin_panel; pause ;;
+        21) setup_vapid_keys; pause ;;
+        22) setup_panel_proxy; pause ;;
+        23) list_panel_proxies; pause ;;
+        24) remove_panel_proxy; pause ;;
+        25) list_service_domains; pause ;;
+        26) setup_api; pause ;;
+        27) remove_api; pause ;;
+        28) update_api; pause ;;
+        29) setup_dedicated_sub; pause ;;
+        30) toggle_dedicated_sub; pause ;;
+        31) update_dedicated_sub; pause ;;
+        32) remove_dedicated_sub; pause ;;
+        33) setup_libretranslate; pause ;;
+        34) remove_libretranslate; pause ;;
+        35) remove_translation_languages; pause ;;
+        36) factory_reset; pause ;;
+        37) restore_backup_cli; pause ;;
+        38) setup_bot_mode; pause ;;
+        39) change_admin_panel_credentials; pause ;;
+        40) telegram_accounts_menu ;;
         [Ss]) web_store_status; pause ;;
-        [Rr]) remove_web_store; pause ;;
         [Ll]) toggle_lang ;;
         0) echo -e "${CYAN}$(t goodbye)${RESET}"; exit 0 ;;
         *) echo -e "${RED}$(t invalid_choice)${RESET}"; sleep 1 ;;

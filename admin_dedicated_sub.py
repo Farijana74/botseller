@@ -147,7 +147,7 @@ def register(router: Router, db, senior_admin_only, deny_mid, replace_admin_view
             return await deny_mid(call)
         enabled = await _flag("dsub_enabled")
         if not enabled and not await asyncio.to_thread(ds.base_url, db):
-            return await call.answer("اول باید سرور ساب را از manage.sh (گزینه‌ی ۲۷) راه‌اندازی کنی.", show_alert=True)
+            return await call.answer("اول باید سرور ساب را از manage.sh (گزینه‌ی ۲۹) راه‌اندازی کنی.", show_alert=True)
         await asyncio.to_thread(db.set_setting, "dsub_enabled", "0" if enabled else "1")
         text, markup = await _main_view("🟢 ساب اختصاصی روشن شد." if not enabled else "🔴 ساب اختصاصی خاموش شد.")
         await replace_admin_view(call, text, reply_markup=markup)
@@ -160,7 +160,7 @@ def register(router: Router, db, senior_admin_only, deny_mid, replace_admin_view
             return await deny_mid(call)
         base = await asyncio.to_thread(ds.base_url, db)
         if not base:
-            return await call.answer("سرور هنوز راه‌اندازی نشده است (manage.sh ← گزینه‌ی ۲۷).", show_alert=True)
+            return await call.answer("سرور هنوز راه‌اندازی نشده است (manage.sh ← گزینه‌ی ۲۹).", show_alert=True)
         await call.answer("در حال تست...")
         import aiohttp
         started = time.monotonic()
@@ -314,12 +314,12 @@ def register(router: Router, db, senior_admin_only, deny_mid, replace_admin_view
     GUIDE = (
         "📘 راهنمای راه‌اندازی ساب اختصاصی\n\n"
         "۱) یک دامنه یا ساب‌دامنه بگیر (مثلاً sub.example.com) و رکورد A آن را به IP همین سرور بزن.\n"
-        "۲) روی سرور اجرا کن: bash manage.sh ← گزینه‌ی ۲۷ «نصب/تنظیم سرور ساب اختصاصی». دامنه را وارد کن؛ "
+        "۲) روی سرور اجرا کن: bash manage.sh ← گزینه‌ی ۲۹ «نصب/تنظیم سرور ساب اختصاصی». دامنه را وارد کن؛ "
         "nginx، SSL و سرویس خودکار ساخته می‌شود و آخرش می‌پرسد همان لحظه روشن شود یا نه.\n"
         "۳) همین‌جا (ادمین بات) روشن/خاموش و همه‌ی شخصی‌سازی‌ها را انجام بده.\n\n"
         "از آن لحظه، سرویس‌های جدیدی که تحویل داده می‌شوند لینک sub.example.com/s/… می‌گیرند؛ سرویس‌های قبلی هم در «سرویس‌های من» "
         "با لینک اختصاصی نشان داده می‌شوند. روشن/خاموش بدون ری‌استارت اعمال می‌شود (تا ۸ ثانیه).\n\n"
-        "دستورهای manage.sh: ۲۷ نصب | ۲۸ روشن/خاموش | ۲۹ آپدیت | ۳۰ حذف.\n"
+        "دستورهای manage.sh: ۲۹ نصب | ۳۰ روشن/خاموش | ۳۱ آپدیت | ۳۲ حذف.\n"
         "نکته: لینک‌های اشتراک هوشمند (/smartsub) هم از همین سرور ساخته می‌شوند."
     )
 
