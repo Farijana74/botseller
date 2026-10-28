@@ -323,7 +323,11 @@ class Agent:
             except Exception:
                 pass
             self._run("userdel", "--remove", username, check=False)
-            raise web.HTTPInternalServerError(text=f"account creation failed: {type(exc).__name__}")
+            detail = type(exc).__name__
+            if isinstance(exc, subprocess.CalledProcessError):
+                # فقط نام دستور و stderr (رمز هرگز در args/stderr نیست) برای عیب‌یابی
+                detail += f" [{(exc.cmd or ['?'])[0]}]: {(exc.stderr or '').strip()[-200:]}"
+            raise web.HTTPInternalServerError(text=f"account creation failed: {detail}")
         return web.json_response({"ok": True, "account_id": account_id, "username": username,
                                   "port": ssh_port, "status": "active", "limit_bytes": limit_bytes}, status=201)
 
