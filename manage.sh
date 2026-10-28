@@ -722,8 +722,8 @@ MSG_EN[fr_done]="✅ Full cleanup finished. To install again, run option 1 (or t
 MSG_FA[fr_done]="✅ پاک‌سازی کامل انجام شد. برای نصب دوباره گزینه‌ی ۱ (یا دستور نصب) را اجرا کن."
 MSG_EN[menu_lang]="Language / زبان (English ⇄ فارسی)"
 MSG_FA[menu_lang]="Language / زبان (English ⇄ فارسی)"
-MSG_EN[ws_need_miniapp]="Run option 13 (setup Mini App) first; the web shop uses the same backend."
-MSG_FA[ws_need_miniapp]="ابتدا گزینه ۱۳ (نصب/تنظیم مینی‌اپ) را اجرا کن؛ فروشگاه وب از همان بک‌اند استفاده می‌کند."
+MSG_EN[ws_need_miniapp]="The web shop service files or venv are missing. Update the project and reinstall packages first."
+MSG_FA[ws_need_miniapp]="فایل‌های سرویس فروشگاه وب یا venv پیدا نشد. ابتدا پروژه را به‌روزرسانی و پکیج‌ها را نصب کن."
 MSG_EN[ws_miniapp_inactive]="The Mini App service is not active. Run option 13 first."
 MSG_FA[ws_miniapp_inactive]="سرویس مینی‌اپ فعال نیست. ابتدا گزینه ۱۳ را اجرا کن."
 MSG_EN[ws_domain_prompt]="Web shop domain (e.g. shop.example.com; its A record must point to this server's IP): "
@@ -746,8 +746,8 @@ MSG_EN[ws_nginx_invalid]="Invalid Nginx configuration; check the file: %s"
 MSG_FA[ws_nginx_invalid]="پیکربندی Nginx نامعتبر است؛ فایل را بررسی کن: %s"
 MSG_EN[ws_cert_email_prompt]="Contact email for SSL renewal notices (empty = no email): "
 MSG_FA[ws_cert_email_prompt]="ایمیل تماس برای تمدید گواهی SSL (خالی = بدون ایمیل): "
-MSG_EN[ws_ready]="Web shop is ready: https://%s/store"
-MSG_FA[ws_ready]="فروشگاه وب آماده است: https://%s/store"
+MSG_EN[ws_ready]="Web shop is ready: https://%s/"
+MSG_FA[ws_ready]="فروشگاه وب آماده است: https://%s/"
 MSG_EN[ws_ports_hint]="Make sure ports 80 and 443 are open in your firewall / provider panel."
 MSG_EN[menu_store_status]="Web shop status"
 MSG_FA[menu_store_status]="وضعیت فروشگاه وب"
@@ -761,8 +761,8 @@ MSG_EN[ws_status_enabled]="nginx config enabled"
 MSG_FA[ws_status_enabled]="کانفیگ nginx فعال"
 MSG_EN[ws_status_cert]="SSL certificate"
 MSG_FA[ws_status_cert]="گواهی SSL"
-MSG_EN[ws_status_store]="/store/ HTTP code"
-MSG_FA[ws_status_store]="کد HTTP مسیر /store/"
+MSG_EN[ws_status_store]="/healthz HTTP code"
+MSG_FA[ws_status_store]="کد HTTP مسیر /healthz"
 MSG_EN[ws_status_root]="/ HTTP code"
 MSG_FA[ws_status_root]="کد HTTP ریشه /"
 MSG_EN[ws_status_miniapp_svc]="Mini App service"
@@ -1357,7 +1357,7 @@ shopvpn_nginx_domains() {
         for f in "$dir"/*.conf; do
             [ -f "$f" ] || continue
             if grep -q "managed-by-shopvpn-panel-proxy" "$f" 2>/dev/null \
-               || grep -qE "proxy_pass http://127\.0\.0\.1:(8001|8002|8003|8004|${wport});" "$f" 2>/dev/null; then
+               || grep -qE "proxy_pass http://127\.0\.0\.1:(8001|8002|8003|8004|8005|${wport});" "$f" 2>/dev/null; then
                 d=$(basename "$f" .conf)
                 echo "$d"
             fi
@@ -3204,12 +3204,9 @@ install_shell_command
 # Web shop setup / راه‌اندازی فروشگاه وب
 # ---------------------------------------------------------------------------
 setup_web_store() {
-    if [ ! -f "$INSTALL_DIR/miniapp/server.py" ] || [ ! -x "$INSTALL_DIR/venv/bin/uvicorn" ]; then
+    local STORE_SERVICE="${SERVICE_NAME}-store"
+    if [ ! -f "$INSTALL_DIR/web_store/server.py" ] || [ ! -x "$INSTALL_DIR/venv/bin/uvicorn" ]; then
         echo -e "${YELLOW}$(t ws_need_miniapp)${RESET}"
-        return 1
-    fi
-    if ! systemctl is-active --quiet "${SERVICE_NAME}-miniapp"; then
-        echo -e "${YELLOW}$(t ws_miniapp_inactive)${RESET}"
         return 1
     fi
     read -rp "$(t ws_domain_prompt)" DOMAIN
@@ -3228,6 +3225,25 @@ setup_web_store() {
     fi
     sudo env DEBIAN_FRONTEND=noninteractive apt-get update -qq || return 1
     sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y nginx certbot python3-certbot-nginx curl >/dev/null || return 1
+    "$INSTALL_DIR/venv/bin/pip" install -r "$INSTALL_DIR/requirements.txt" --quiet
+    sudo bash -c "cat > /etc/systemd/system/${STORE_SERVICE}.service" <<EOF
+[Unit]
+Description=ShopVPN Web Store
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=$INSTALL_DIR
+ExecStart=$INSTALL_DIR/venv/bin/uvicorn web_store.server:app --host 127.0.0.1 --port 8005
+Restart=always
+RestartSec=5
+User=$(whoami)
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    sudo systemctl daemon-reload
+    sudo systemctl enable "$STORE_SERVICE" >/dev/null 2>&1
     local CONF="/etc/nginx/sites-available/shopvpn-store-${DOMAIN}.conf"
     if [ -e "$CONF" ]; then
         echo -e "${YELLOW}$(t ws_conf_exists "$CONF")${RESET}"
@@ -3239,20 +3255,8 @@ server {
     listen 80;
     server_name $DOMAIN;
     client_max_body_size 20m;
-    # ریشه‌ی دامنه = فروشگاه وب. مینی‌اپ فقط با ?app=1 باز می‌شود (دکمه‌ی منوی بات تلگرام).
-    location = / {
-        if (\$arg_app != "1") {
-            return 302 /store/;
-        }
-        proxy_pass http://127.0.0.1:8001;
-        proxy_http_version 1.1;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-    }
     location / {
-        proxy_pass http://127.0.0.1:8001;
+        proxy_pass http://127.0.0.1:8005;
         proxy_http_version 1.1;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
@@ -3270,9 +3274,11 @@ EOF
     else
         sudo certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos --register-unsafely-without-email --redirect || return 1
     fi
-    # آدرس مینی‌اپ بات = ریشه با ?app=1 (تا ریشه‌ی دامنه فروشگاه بماند)
-    set_env_key MINIAPP_URL "https://$DOMAIN/?app=1"
-    sudo systemctl restart "$SERVICE_NAME" >/dev/null 2>&1 || true
+    set_env_key SHOPVPN_SEO_SITE_URL "https://$DOMAIN"
+    if ! grep -q "^SHOPVPN_TURNSTILE_SITE_KEY=." "$INSTALL_DIR/.env" 2>/dev/null; then
+        set_env_key SHOPVPN_WEB_ALLOW_NO_TURNSTILE 1
+    fi
+    sudo systemctl restart "$STORE_SERVICE" || { echo -e "${RED}$(t miniapp_restart_failed)${RESET}"; return 1; }
     echo -e "${GREEN}${BOLD}$(t ws_ready "$DOMAIN")${RESET}"
     echo -e "${DIM}$(t ws_ports_hint)${RESET}"
 }
@@ -3302,6 +3308,9 @@ setup_email_service() {
     if systemctl list-unit-files "${SERVICE_NAME}-miniapp.service" --no-legend 2>/dev/null | grep -q "${SERVICE_NAME}-miniapp.service"; then
         sudo systemctl restart "${SERVICE_NAME}-miniapp" || { echo -e "${RED}$(t miniapp_restart_failed)${RESET}"; return 1; }
     fi
+    if systemctl list-unit-files "${SERVICE_NAME}-store.service" --no-legend 2>/dev/null | grep -q "${SERVICE_NAME}-store.service"; then
+        sudo systemctl restart "${SERVICE_NAME}-store" || { echo -e "${RED}$(t miniapp_restart_failed)${RESET}"; return 1; }
+    fi
     sudo systemctl restart "$SERVICE_NAME" >/dev/null 2>&1 || true
     echo -e "${GREEN}$(t smtp_saved)${RESET}"
     echo -e "${YELLOW}$(t smtp_fail_hint "$SERVICE_NAME")${RESET}"
@@ -3322,6 +3331,9 @@ setup_web_turnstile() {
     set_env_key SHOPVPN_TURNSTILE_SECRET_KEY "$TS_SECRET"
     if systemctl list-unit-files "${SERVICE_NAME}-miniapp.service" --no-legend 2>/dev/null | grep -q "${SERVICE_NAME}-miniapp.service"; then
         sudo systemctl restart "${SERVICE_NAME}-miniapp" || { echo -e "${RED}$(t miniapp_restart_failed)${RESET}"; return 1; }
+    fi
+    if systemctl list-unit-files "${SERVICE_NAME}-store.service" --no-legend 2>/dev/null | grep -q "${SERVICE_NAME}-store.service"; then
+        sudo systemctl restart "${SERVICE_NAME}-store" || { echo -e "${RED}$(t miniapp_restart_failed)${RESET}"; return 1; }
     fi
     echo -e "${GREEN}$(t ts_saved)${RESET}"
 }
@@ -3350,7 +3362,7 @@ web_store_status() {
     miniapp_url=""
     [ -f "$env_file" ] && miniapp_url=$(grep -m1 "^MINIAPP_URL=" "$env_file" | cut -d= -f2-)
     svc=$(t ws_no)
-    systemctl is-active --quiet "${SERVICE_NAME}-miniapp" 2>/dev/null && svc=$(t ws_yes)
+    systemctl is-active --quiet "${SERVICE_NAME}-store" 2>/dev/null && svc=$(t ws_yes)
     echo -e "${CYAN}${BOLD}$(t ws_status_title)${RESET}"
     for d in "${DOMAINS[@]}"; do
         enabled=$(t ws_no)
@@ -3358,7 +3370,7 @@ web_store_status() {
         cert=$(t ws_no)
         [ -e "/etc/letsencrypt/live/${d}/fullchain.pem" ] && cert=$(t ws_yes)
         # بررسی محلی از خود سرور (بدون نیاز به DNS): پاسخ مسیرها با کد HTTP
-        code_store=$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 --resolve "${d}:443:127.0.0.1" "https://${d}/store/" 2>/dev/null)
+        code_store=$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 --resolve "${d}:443:127.0.0.1" "https://${d}/healthz" 2>/dev/null)
         code_root=$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 --resolve "${d}:443:127.0.0.1" "https://${d}/" 2>/dev/null)
         echo "  ${d}"
         echo "    $(t ws_status_enabled): ${enabled}"
@@ -3399,13 +3411,6 @@ remove_web_store() {
     sudo rm -f "/etc/nginx/sites-enabled/shopvpn-store-${DOMAIN}.conf" "/etc/nginx/sites-available/shopvpn-store-${DOMAIN}.conf"
     sudo systemctl reload nginx 2>/dev/null || true
 
-    if [ -f "$INSTALL_DIR/.env" ] && grep -qF "MINIAPP_URL=https://${DOMAIN}/?app=1" "$INSTALL_DIR/.env"; then
-        if [ -e "/etc/nginx/sites-available/${DOMAIN}.conf" ]; then
-            set_env_key MINIAPP_URL "https://${DOMAIN}"
-        else
-            echo -e "${YELLOW}$(t ws_miniapp_url_warn)${RESET}"
-        fi
-    fi
     sudo systemctl restart "$SERVICE_NAME" >/dev/null 2>&1 || true
     echo -e "${GREEN}$(t ws_removed "$DOMAIN")${RESET}"
 }
