@@ -73,6 +73,12 @@
   function money(n) { return fmt(n) + " " + t("currency"); }
   function go(hash) { if (location.hash === hash) route(); else location.hash = hash; }
   function reducedMotion() { return window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches; }
+  function networkNotice() {
+    if (navigator.onLine) { toast(t("network_back") || "Connection restored", "ok"); }
+    else { toast(t("network_offline") || "You are offline", "warn"); }
+  }
+  window.addEventListener("online", networkNotice);
+  window.addEventListener("offline", networkNotice);
 
   function every(fn, ms) { var id = setInterval(fn, ms); timers.push(id); return id; }
   function later(fn, ms) { var id = setTimeout(fn, ms); timers.push(id); return id; }
@@ -81,10 +87,21 @@
     timers = [];
   }
 
-  function toast(msg) {
-    var n = h("div", { class: "toast", text: msg });
+  function toast(msg, kind) {
+    var n = h("div", { class: "toast" + (kind ? " " + kind : ""), role: "status", text: msg });
     $("toasts").appendChild(n);
-    setTimeout(function () { n.remove(); }, 2200);
+    later(function () { n.classList.add("out"); }, 1850);
+    later(function () { n.remove(); }, 2250);
+  }
+  function skeletonCards(count) {
+    var box = h("div", { class: "skeleton-grid", "aria-hidden": "true" });
+    for (var i = 0; i < (count || 3); i++) {
+      box.appendChild(h("div", { class: "skeleton-card card" },
+        h("i", { class: "sk sk-line wide" }), h("i", { class: "sk sk-line" }),
+        h("i", { class: "sk sk-block" }), h("i", { class: "sk sk-line short" }),
+        h("i", { class: "sk sk-btn" })));
+    }
+    return box;
   }
   function copyText(text) {
     function fallback() {
@@ -113,7 +130,9 @@
     var body;
     if (opts.form) body = opts.form;
     else if (opts.body) { headers["Content-Type"] = "application/json"; body = JSON.stringify(opts.body); }
-    return fetch(path, { method: opts.method || "GET", headers: headers, body: body }).then(function (r) {
+    var controller = window.AbortController ? new AbortController() : null;
+    var timeout = controller ? window.setTimeout(function () { controller.abort(); }, opts.timeout || 15000) : null;
+    return fetch(path, { method: opts.method || "GET", headers: headers, body: body, cache: "no-store", credentials: "same-origin", signal: controller ? controller.signal : undefined }).then(function (r) {
       return r.json().catch(function () { return {}; }).then(function (d) {
         if (!r.ok) {
           var det = d && d.detail;
@@ -124,11 +143,43 @@
         }
         return d;
       });
+    }).catch(function (e) {
+      if (e && e.name === "AbortError") {
+        var te = new Error(t("network_timeout") || "Request timed out");
+        te.code = "TIMEOUT";
+        throw te;
+      }
+      throw e;
+    }).finally(function () {
+      if (timeout) window.clearTimeout(timeout);
     });
   }
-  function fetchBlob(path) {
-    return fetch(path, { headers: { "X-Web-Token": S.token } }).then(function (r) {
-      return r.ok ? r.blob() : Promise.reject(new Error("blob"));
+  function fetchBlob(path, opts) {
+    opts = opts || {};
+    var headers = { "X-Web-Token": S.token, "X-Language": lang };
+    var controller = window.AbortController ? new AbortController() : null;
+    var timeout = controller ? window.setTimeout(function () { controller.abort(); }, opts.timeout || 15000) : null;
+    return fetch(path, {
+      headers: headers,
+      cache: "no-store",
+      credentials: "same-origin",
+      signal: controller ? controller.signal : undefined
+    }).then(function (r) {
+      if (!r.ok) {
+        var e = new Error("blob");
+        e.status = r.status;
+        throw e;
+      }
+      return r.blob();
+    }).catch(function (e) {
+      if (e && e.name === "AbortError") {
+        var te = new Error(t("network_timeout") || "Request timed out");
+        te.code = "TIMEOUT";
+        throw te;
+      }
+      throw e;
+    }).finally(function () {
+      if (timeout) window.clearTimeout(timeout);
     });
   }
 
@@ -239,8 +290,11 @@
 
   function mount(node, title) {
     var v = $("view");
+    v.classList.remove("page-enter");
+    void v.offsetWidth;
     v.textContent = "";
     v.appendChild(node);
+    v.classList.add("page-enter");
     var base = S.brand.name || "ShopVPN";
     document.title = title ? title + " | " + base : base;
     window.scrollTo(0, 0);
@@ -387,16 +441,26 @@
     };
   }
 
-  function planCard(p) {
+  function planCard(p, featured) {
     var off = discountPercent(p);
-    return h("article", { class: "plan" + (p.in_stock ? "" : " off") },
-      h("div", { class: "row between" },
-        h("h3", { text: p.name }),
+    var days = Number(p.duration_days || 0);
+    var gb = Number(p.volume_gb || 0);
+    var specs = h("div", { class: "plan-specs" });
+    if (gb > 0) specs.appendChild(h("span", null, h("b", { class: "num", text: fmt(gb) }), " ", t("plan_gb")));
+    else specs.appendChild(h("span", null, h("b", { text: t("plan_unlimited") })));
+    if (days > 0) specs.appendChild(h("span", null, h("b", { class: "num", text: fmt(days) }), " ", t("plan_days")));
+    else specs.appendChild(h("span", null, h("b", { text: t("plan_unlimited") })));
+    return h("article", { class: "plan plan-premium" + (p.in_stock ? "" : " off") + (featured ? " featured" : "") },
+      h("div", { class: "plan-topline" },
+        h("span", { class: "plan-status" }, h("i"), h("span", { text: p.in_stock ? t("plan_stock") : t("plan_unavailable") })),
         off ? h("span", { class: "badge ok num", text: fmt(off) + "% " + t("off") }) : null),
+      featured ? h("span", { class: "plan-featured", text: t("plan_best") }) : null,
+      h("div", { class: "plan-title-row" }, h("h3", { text: p.name }), h("span", { class: "plan-value", text: t("plan_value") })),
       h("p", { class: "desc", text: p.description || "" }),
-      h("div", { class: "foot-row" },
-        h("div", null,
-          off ? h("div", { class: "old num", text: money(p.original_price) }) : null,
+      specs,
+      h("div", { class: "plan-bottom" },
+        h("div", { class: "plan-price" },
+          off ? h("div", { class: "old num" }, money(p.original_price)) : null,
           h("div", { class: "price num" }, fmt(p.price), h("small", { text: t("currency") }))),
         p.in_stock
           ? h("a", { class: "btn", href: "#/buy/" + p.id, text: t("buy") })
@@ -407,7 +471,18 @@
     var cats = c.categories || [];
     if (!cats.length) { box.appendChild(alertBox(t("plans_empty"), true)); return; }
     var active = "all";
+    var sort = "value";
     var chips = h("div", { class: "chips", role: "tablist" });
+    var controls = h("div", { class: "catalog-controls" });
+    var count = h("span", { class: "catalog-count" });
+    var sortWrap = h("label", { class: "sort-control" }, h("span", { text: t("sort_label") }));
+    var sortSelect = h("select", { class: "input", "aria-label": t("sort_label") });
+    [["value", t("sort_value")], ["low", t("sort_low")], ["high", t("sort_high")]].forEach(function (x) { sortSelect.appendChild(h("option", { value: x[0], text: x[1] })); });
+    sortSelect.value = sort;
+    sortSelect.addEventListener("change", function () { sort = sortSelect.value; draw(); });
+    sortWrap.appendChild(sortSelect);
+    controls.appendChild(count);
+    controls.appendChild(sortWrap);
     var grid = h("div", { class: "plans" });
     function draw() {
       chips.textContent = "";
@@ -417,14 +492,26 @@
           onclick: function () { active = cat.id; draw(); }
         }));
       });
-      grid.textContent = "";
+      var items = [];
       cats.forEach(function (cat) {
         if (active !== "all" && active !== cat.id) return;
-        cat.products.forEach(function (p) { grid.appendChild(planCard(p)); });
+        (cat.products || []).forEach(function (p) { items.push(p); });
       });
+      items.sort(function (a, b) {
+        if (sort === "low") return Number(a.price) - Number(b.price);
+        if (sort === "high") return Number(b.price) - Number(a.price);
+        var av = Number(a.price) / Math.max(1, Number(a.volume_gb || 0));
+        var bv = Number(b.price) / Math.max(1, Number(b.volume_gb || 0));
+        return (discountPercent(b) - discountPercent(a)) || (av - bv);
+      });
+      count.textContent = fmt(items.length) + " " + (lang === "fa" ? "پلن" : "plans");
+      grid.textContent = "";
+      var featuredId = items.length ? items[0].id : null;
+      items.forEach(function (p) { grid.appendChild(planCard(p, p.id === featuredId && items.length > 1)); });
     }
     draw();
     if (cats.length > 1) box.appendChild(chips);
+    box.appendChild(controls);
     box.appendChild(grid);
   }
 
@@ -458,7 +545,7 @@
       h("p", { class: "sub", text: t("plans_sub") }),
       plansBox);
     mount(h("div", null, hero.node, plans, howSection(), faqSection()), "");
-    plansBox.appendChild(spinnerBlock());
+    plansBox.appendChild(skeletonCards(3));
     loadCatalog().then(function (c) {
       fillPlans(plansBox, c);
       hero.bind(c);
@@ -874,10 +961,18 @@
       }
       var off = discountPercent(p);
       body.textContent = "";
-      body.appendChild(h("div", { class: "card stack" },
-        h("h1", { style: { fontSize: "28px" }, text: p.name }),
+      var days = Number(p.duration_days || 0);
+      var gb = Number(p.volume_gb || 0);
+      var productSpecs = h("div", { class: "checkout-specs" },
+        h("div", null, h("span", { text: t("plan_gb") }), h("b", { text: gb > 0 ? fmt(gb) : t("plan_unlimited") })),
+        h("div", null, h("span", { text: t("plan_days") }), h("b", { text: days > 0 ? fmt(days) : t("plan_unlimited") })),
+        h("div", null, h("span", { text: t("plan_stock") }), h("b", { text: p.in_stock ? "✓" : "—" })));
+      body.appendChild(h("div", { class: "card stack checkout-product" },
+        h("div", { class: "checkout-product-head" },
+          h("div", null, h("span", { class: "eyebrow", text: t("plan_value") }), h("h1", { style: { fontSize: "30px" }, text: p.name })),
+          off ? h("span", { class: "badge ok num", text: fmt(off) + "% " + t("off") }) : null),
         p.description ? h("p", { class: "mute", style: { whiteSpace: "pre-line" }, text: p.description }) : null,
-        off ? h("span", { class: "badge ok num", text: fmt(off) + "% " + t("off") }) : null,
+        productSpecs,
         h("div", { class: "row between" }, h("span", { text: t("qty") }),
           h("div", { class: "qty" },
             h("button", { type: "button", "aria-label": "-", text: "\u2212", onclick: function () { setQty(qty - 1); } }), qtyOut,
@@ -909,7 +1004,7 @@
     var id = parseInt(parts[0], 10);
     var box = h("div");
     mount(h("div", { class: "wrap page", style: { maxWidth: "640px" } }, h("h1", { text: t("order_title") }), h("div", { class: "stack", style: { marginTop: "24px" } }, box)), t("order_title"));
-    box.appendChild(spinnerBlock());
+    box.appendChild(h("div", { class: "card stack pending-card" }, skeletonCards(2)));
     function check() {
       api("/api/web/orders/" + id).then(function (o) {
         if (o.status === "approved") { stopTimers(); deliveryView(box, id, 0, {}); return; }
@@ -1013,10 +1108,10 @@
   }
 
   function serviceCard(s, renewEnabled, reload) {
-    var badges = h("div", { class: "row" });
+    var badges = h("div", { class: "row svc-badges" });
     if (s.is_test) badges.appendChild(h("span", { class: "badge", text: t("badge_test") }));
     if (!s.enabled) badges.appendChild(h("span", { class: "badge bad", text: t("badge_off") }));
-    var qrHost = h("div", { class: "row" });
+    var qrHost = h("div", { class: "qr-host" });
     var qrBtn = h("button", { class: "btn small ghost", type: "button", text: t("qr_show") });
     qrBtn.addEventListener("click", function () {
       if (qrHost.firstChild) { qrHost.textContent = ""; qrBtn.textContent = t("qr_show"); return; }
@@ -1025,10 +1120,32 @@
       qrBtn.textContent = t("qr_hide");
       fetchBlob("/api/web/qr?link=" + encodeURIComponent(s.link)).then(function (bl) { img.src = URL.createObjectURL(bl); }).catch(function () { qrHost.textContent = ""; });
     });
-    var actions = h("div", { class: "row" }, h("button", { class: "btn small", type: "button", text: t("copy"), onclick: function () { copyText(s.link); } }), qrBtn);
+    var actions = h("div", { class: "row svc-actions" }, h("button", { class: "btn small", type: "button", text: t("copy"), onclick: function () { copyText(s.link); } }), qrBtn);
     if (/^https?:\/\//i.test(s.link)) APPS.forEach(function (a) { actions.appendChild(h("a", { class: "btn small ghost", href: a[1](s.link), text: a[0] })); });
     if (s.can_renew && renewEnabled) actions.appendChild(h("button", { class: "btn small ghost", type: "button", text: t("svc_renew"), onclick: function () { renewSheet(s, reload); } }));
-    return h("article", { class: "card svc" }, h("h3", { text: s.name }), badges, usageBlock(s, badges), actions, qrHost);
+
+    var usage = usageBlock(s, badges);
+    var title = h("div", { class: "svc-title" }, h("div", { class: "svc-icon", text: "⌁" }), h("div", null,
+      h("h3", { text: s.name }), h("p", { class: "mute small-t", text: s.enabled ? t("svc_active") : t("svc_inactive") })));
+    var link = h("div", { class: "svc-link num", title: s.link, text: s.link });
+    return h("article", { class: "card svc svc-premium" },
+      h("div", { class: "svc-top" }, title, badges),
+      h("div", { class: "svc-content" }, usage, link),
+      actions, qrHost);
+  }
+
+  function dashboardSummary(box, services) {
+    var active = services.filter(function (s) { return s.enabled && !s.is_test; }).length;
+    var expiring = services.filter(function (s) {
+      if (!s.expires_at) return false;
+      var days = Math.ceil((new Date(s.expires_at).getTime() - Date.now()) / 86400000);
+      return days >= 0 && days <= 7;
+    }).length;
+    box.appendChild(h("div", { class: "dash-stats" },
+      h("div", { class: "dash-stat" }, h("span", { class: "dash-stat-icon" }, "◈"), h("div", null, h("b", { text: fmt(services.length) }), h("span", { class: "mute", text: t("dash_services") }))),
+      h("div", { class: "dash-stat" }, h("span", { class: "dash-stat-icon" }, "✓"), h("div", null, h("b", { text: fmt(active) }), h("span", { class: "mute", text: t("dash_active") }))),
+      h("div", { class: "dash-stat" }, h("span", { class: "dash-stat-icon" }, "◷"), h("div", null, h("b", { text: fmt(expiring) }), h("span", { class: "mute", text: t("dash_expiring") })))
+    ));
   }
 
   function servicesPanel(box) {
@@ -1037,10 +1154,12 @@
       api("/api/web/services").then(function (r) {
         box.textContent = "";
         if (!r.services.length) {
-          box.appendChild(h("div", { class: "card center" }, h("p", { class: "mute", text: t("svc_none") }), h("a", { class: "btn", href: "#/plans", text: t("svc_buy") })));
+          box.appendChild(h("div", { class: "empty-state card" }, h("div", { class: "empty-icon", text: "⌁" }), h("h3", { text: t("svc_none") }), h("p", { class: "mute", text: t("dash_empty_text") }), h("a", { class: "btn", href: "#/plans", text: t("svc_buy") })));
           return;
         }
-        var grid = h("div", { class: "stack" });
+        dashboardSummary(box, r.services);
+        box.appendChild(h("div", { class: "section-head" }, h("div", null, h("h2", { text: t("dash_my_services") }), h("p", { class: "mute", text: t("dash_services_sub") })), h("a", { class: "btn small ghost", href: "#/plans", text: t("dash_add") })));
+        var grid = h("div", { class: "service-grid" });
         r.services.forEach(function (s) { grid.appendChild(serviceCard(s, r.renew_enabled, function () { box.textContent = ""; box.appendChild(spinnerBlock()); load(); })); });
         box.appendChild(grid);
       }).catch(function (e) { box.textContent = ""; var n = h("div"); box.appendChild(n); fail(e, n, load); });
@@ -1199,10 +1318,11 @@
       return h("button", { type: "button", role: "tab", "aria-selected": String(k === tab), text: t("tab_" + k), onclick: function () { go("#/account/" + k); } });
     }));
     var panel = h("div", { class: "stack" });
-    mount(h("div", { class: "wrap page stack" },
-      h("div", { class: "card acct-head" },
-        h("div", null, h("h1", { style: { fontSize: "26px" }, text: t("acct_hello", { name: name }) }), h("p", { class: "mute", text: t("acct_wallet") })),
-        wallet),
+    mount(h("div", { class: "wrap page stack account-page" },
+      h("div", { class: "card acct-head acct-hero" },
+        h("div", { class: "acct-copy" }, h("span", { class: "eyebrow", text: t("dash_overview") }), h("h1", { text: t("acct_hello", { name: name }) }), h("p", { class: "mute", text: t("dash_welcome") })),
+        h("div", { class: "wallet-box" }, h("span", { class: "mute", text: t("acct_wallet") }), wallet),
+        h("div", { class: "acct-actions" }, h("a", { class: "btn", href: "#/plans", text: t("dash_buy") }), h("a", { class: "btn ghost", href: "#/account/orders", text: t("dash_orders") }))),
       bar, panel), t("nav_account"));
     api("/api/me").then(function (m) { wallet.textContent = money(m.wallet_credit || 0); }).catch(function (e) { wallet.textContent = ""; if (e.status === 401) fail(e, h("div"), null); });
     if (tab === "services") servicesPanel(panel);
