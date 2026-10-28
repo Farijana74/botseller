@@ -67,6 +67,15 @@ class CoreTests(unittest.TestCase):
         js = ds.parse_body(b'{"outbounds": []}')
         self.assertEqual(js.kind, "other")
 
+    def test_ssh_uri_is_recognized_in_plain_and_base64_subscriptions(self):
+        ssh = "ssh://alice:secret@ssh.example.com:22#Germany-SSH"
+        plain = ds.parse_body(ssh.encode())
+        self.assertEqual(plain.uris, [ssh])
+        encoded = ds.parse_body(b64(ssh))
+        self.assertEqual(encoded.uris, [ssh])
+        self.assertEqual(ds.uri_protocol(ssh), "SSH")
+        self.assertEqual(ds.uri_remark(ssh), "Germany-SSH")
+
     def test_remark_flag_protocol(self):
         self.assertEqual(ds.uri_remark(VLESS), "🇩🇪 Germany")
         self.assertEqual(ds.uri_flag("🇩🇪 Germany"), "🇩🇪")
@@ -318,6 +327,23 @@ class DbTests(unittest.TestCase):
         self.assertEqual(ds.dedicated_link_for_upstream(self.db, "https://other/sub/zzz"), "https://other/sub/zzz")
         self.assertEqual(ds.dedicated_link_for_upstream(self.db, "vless://abc"), "vless://abc")
         self.assertNotIn("panel.example.com", link)
+
+    def test_shared_vpn_ssh_quota_overrides_panel_unlimited(self):
+        from datetime import datetime, timedelta, timezone
+        cid = add_service(self.db, expires_in_days=30)
+        expires = (datetime.now(timezone.utc) + timedelta(days=12)).isoformat()
+        pool_id = self.db.create_quota_pool(100, 1, expires, label="combined test")
+        self.assertTrue(self.db.attach_custom_config_to_quota_pool(pool_id, cid))
+        self.db.record_usage_snapshot("vpn", f"custom_config:{cid}", 120 * 1024 ** 2,
+                                      source="test", reported_at=datetime.now(timezone.utc).isoformat())
+        self.db.attach_quota_service(pool_id, "ssh", "ssh-account-test")
+        self.db.record_usage_snapshot("ssh", "ssh-account-test", 80 * 1024 ** 2,
+                                      source="test", reported_at=datetime.now(timezone.utc).isoformat())
+        info = ds.quota_info_for_config(self.db, cid)
+        self.assertEqual(info["total"], 1024 ** 3)
+        self.assertEqual(info["upload"], 200 * 1024 ** 2)
+        self.assertEqual(info["download"], 0)
+        self.assertGreater(info["expire"], int(time.time()))
 
     def test_usage_and_logs(self):
         cid = add_service(self.db)

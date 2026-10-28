@@ -270,11 +270,19 @@ async def provision_ssh_direct(db, product, quantity: int = 1, user_id: int = No
     except Exception as exc:
         raise ProvisionError(f"آماده‌سازی محصول SSH ناموفق بود: {exc}") from exc
     built = []
+    order = db.get_order(order_id) if order_id is not None else None
+    # Keep the SSH login recognizable and tied to the name shown for the order.
+    # SSH usernames are restricted to portable ASCII account-name characters.
+    requested_base = str((order or {}).get("config_name") or "").strip().lower()
+    requested_base = "".join(ch for ch in requested_base if ch in string.ascii_lowercase + string.digits + "_-").strip("_-")
+    requested_base = requested_base[:12]
     try:
-        for _ in range(quantity):
+        for item_index in range(quantity):
             result = None
             for attempt in range(5):
-                username = "sv" + "".join(random.choices(string.ascii_lowercase + string.digits, k=10))
+                suffix = "".join(random.choices(string.ascii_lowercase + string.digits, k=7))
+                unit_base = requested_base if quantity == 1 else f"{requested_base[:9]}{item_index + 1}"
+                username = f"{unit_base}_{suffix}" if unit_base else "sv" + suffix
                 try:
                     # The shared pool is the sole volume authority. A duplicate
                     # per-account cap would prevent a renewed/increased pool from
