@@ -1683,6 +1683,7 @@ ADMIN_PANEL_ITEMS = [
     ("adm_engage", "🎁 صندوق شانس و پیشرفت", "eng_adm"),
     ("adm_spam_settings", "🛡 ضداسپم کاربران", "adm_spam_settings"),
     ("adm_gswitch", "🔌 سوئیچ سراسری ربات (خاموش/روشن)", "adm_gswitch"),
+    ("adm_update", "🔄 آپدیت پروژه", "adm_update"),
     ("adm_dsub", "🔗 ساب اختصاصی (دامنه، صفحه‌ی وب، اپ‌ها)", "adm_dsub"),
     ("adm_temp_message", "⏳ پیام موقت (خودحذف‌شونده)", "adm_temp_message"),
     ("adm_set_support_contact", "📞 روش‌های ارتباط با پشتیبانی", "adm_set_support_contact"),
@@ -1812,6 +1813,7 @@ ADMIN_PANEL_CATEGORIES = [
     ]),
     ("management", "📊 گزارش و سیستم", [
         "adm_gswitch",
+        "adm_update",
         "adm_stats",
         "adm_user_search",
         "adm_backup_menu",
@@ -1875,6 +1877,9 @@ def _is_item_visible(db, key: str, is_main_bot: bool) -> bool:
         return (not is_main_bot) and _is_volume_credit_owner(db)
     if key.startswith(("adm_set_xgw_", "adm_xgw_pay_")) and not is_main_bot:
         return False
+    if key == "adm_update":
+        # آپدیت پروژه فقط از بات اصلی (یک نصب = یک پروژه)، نه بات‌های نمایندگی
+        return is_main_bot and db.is_full_access_bot(is_main_bot)
     if key in ("adm_userbot", "adm_leak") and not is_main_bot:
         # یوزربات و اکانت تشخیص نشت فقط به اکانت تلگرام مالک بات اصلی وصل می‌شوند
         return False
