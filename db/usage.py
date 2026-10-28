@@ -273,6 +273,22 @@ class UsageMixin:
                          (int(pool_id), kind, sid))
             return True
 
+    def quota_pool_for_custom_config(self, custom_config_id: int):
+        """Return the active quota pool linked to a VPN config, if any.
+
+        Combined VPN+SSH products link the VPN service through the stable member ID
+        ``custom_config:<id>``. The subscription UI uses this pool as the commercial
+        source of truth instead of trusting a panel header that may say unlimited.
+        """
+        service_id = f"custom_config:{int(custom_config_id)}"
+        with self._get_conn() as conn:
+            row = conn.execute(
+                "SELECT p.* FROM quota_pool_members m JOIN quota_pools p ON p.id=m.pool_id "
+                "WHERE m.service_kind='vpn' AND m.service_id=? ORDER BY p.id DESC LIMIT 1",
+                (service_id,),
+            ).fetchone()
+        return dict(row) if row else None
+
     def get_quota_usage(self, pool_id: int) -> dict:
         """گزارش مصرف جمع‌شده از آخرین snapshot هر سرویس متصل به pool."""
         with self._get_conn() as conn:
