@@ -13,6 +13,12 @@ import time
 import os
 import smtplib
 from email.message import EmailMessage
+from pathlib import Path
+
+try:
+    from dotenv import dotenv_values
+except Exception:  # pragma: no cover
+    dotenv_values = None
 
 LOGIN_TTL = 600                 # اعتبار درخواست ورود (ثانیه)
 SESSION_TTL = 30 * 86400        # اعتبار نشست سایت
@@ -152,14 +158,41 @@ def poll_login(db, poll: str, ip: str = ""):
         return "ok", token, int(row["tg_id"])
 
 
+_ENV_FILE = Path(__file__).resolve().parent / ".env"
+_env_cache = {"mtime": None, "values": {}}
+
+
+def _smtp_env(name: str, default: str = "") -> str:
+    """مقدار تنظیم SMTP: اول از فایل .env (همیشه تازه)، بعد از محیط پروسه.
+
+    manage.sh مقدارها را در .env می‌نویسد؛ اگر سرویس ری‌استارت نشده یا مقدار بعد از
+    بالا آمدن سرویس عوض شده باشد، os.environ کهنه است و ورود ایمیلی پنهان می‌ماند.
+    """
+    try:
+        mtime = _ENV_FILE.stat().st_mtime
+        if _env_cache["mtime"] != mtime:
+            _env_cache["values"] = dict(dotenv_values(_ENV_FILE)) if dotenv_values else {}
+            _env_cache["mtime"] = mtime
+        val = _env_cache["values"].get(name)
+        if val not in (None, ""):
+            return str(val)
+    except Exception:
+        pass
+    return os.getenv(name, default)
+
+
+def email_configured() -> bool:
+    return bool(_smtp_env("SHOPVPN_SMTP_HOST").strip() and _smtp_env("SHOPVPN_SMTP_USER").strip() and _smtp_env("SHOPVPN_SMTP_PASSWORD"))
+
+
 def send_email_code(email: str, code: str) -> None:
-    """Send an email verification code using SMTP environment settings."""
-    host = os.getenv("SHOPVPN_SMTP_HOST", "").strip()
-    user = os.getenv("SHOPVPN_SMTP_USER", "").strip()
-    password = os.getenv("SHOPVPN_SMTP_PASSWORD", "")
-    sender = os.getenv("SHOPVPN_SMTP_FROM", user).strip()
-    port = int(os.getenv("SHOPVPN_SMTP_PORT", "587"))
-    use_ssl = os.getenv("SHOPVPN_SMTP_SSL", "0").lower() in {"1", "true", "yes"}
+    """Send an email verification code using SMTP settings (.env first, then environment)."""
+    host = _smtp_env("SHOPVPN_SMTP_HOST").strip()
+    user = _smtp_env("SHOPVPN_SMTP_USER").strip()
+    password = _smtp_env("SHOPVPN_SMTP_PASSWORD")
+    sender = (_smtp_env("SHOPVPN_SMTP_FROM") or user).strip()
+    port = int(_smtp_env("SHOPVPN_SMTP_PORT", "587") or "587")
+    use_ssl = _smtp_env("SHOPVPN_SMTP_SSL", "0").lower() in {"1", "true", "yes"}
     if not host or not sender or not user or not password:
         raise RuntimeError("email_not_configured")
     msg = EmailMessage()
