@@ -3467,7 +3467,7 @@ async function openCustomConfigPaymentMethodsModal() {
 function productProvisionFieldsHtml(panelServers, sshNodes = [], prefill = null) {
   panelServers = panelServers || []; sshNodes = sshNodes || [];
   const isDirect = !!(prefill && (prefill.provision_server_id || prefill.provision_ssh_node_id));
-  const target = prefill && prefill.provision_ssh_node_id ? 'ssh' : 'vpn';
+  const target = prefill && prefill.provision_ssh_node_id ? (prefill.provision_server_id ? 'both' : 'ssh') : 'vpn';
   const durUnlimited = !!(prefill && prefill.duration_days === 0);
   const volUnlimited = !!(prefill && prefill.auto_provision_volume_gb === 0);
   return `
@@ -3476,9 +3476,9 @@ function productProvisionFieldsHtml(panelServers, sshNodes = [], prefill = null)
       <label style="display:flex;align-items:center;gap:4px"><input type="radio" name="prod-source" value="direct" ${isDirect ? 'checked' : ''}> ساخت خودکار</label>
     </div>
     <div id="prod-direct-fields" class="form-grid" style="display:${isDirect ? '' : 'none'}">
-      <label class="field"><span>نوع مقصد</span><select class="input" id="prod-target-type"><option value="vpn" ${target === 'vpn' ? 'selected' : ''}>پنل VPN</option>${sshNodes.length || (prefill && prefill.provision_ssh_node_id) ? `<option value="ssh" ${target === 'ssh' ? 'selected' : ''}>نود SSH (Linux Agent)</option>` : ''}</select></label>
-      <div id="prod-vpn-fields" style="display:${target === 'vpn' ? '' : 'none'}"><label class="field"><span>پنل VPN</span><select class="input" id="prod-server">${panelServers.map(s => `<option value="${s.id}" ${prefill && Number(prefill.provision_server_id) === Number(s.id) ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></label></div>
-      <div id="prod-ssh-fields" style="display:${target === 'ssh' ? '' : 'none'}"><label class="field"><span>نود SSH</span><select class="input" id="prod-ssh-node">${sshNodes.map(n => `<option value="${n.id}" ${prefill && Number(prefill.provision_ssh_node_id) === Number(n.id) ? 'selected' : ''}>${esc(n.name)} · ${esc(n.host || '')}</option>`).join('')}</select><span class="card-sub">فقط Linux Agent فعال با حسابداری معتبر پشتیبانی می‌شود.</span></label></div>
+      <label class="field"><span>نوع مقصد</span><select class="input" id="prod-target-type"><option value="vpn" ${target === 'vpn' ? 'selected' : ''}>پنل VPN</option>${sshNodes.length || (prefill && prefill.provision_ssh_node_id) ? `<option value="ssh" ${target === 'ssh' ? 'selected' : ''}>نود SSH (Linux Agent)</option><option value="both" ${target === 'both' ? 'selected' : ''}>ترکیبی VPN + SSH (حجم و زمان مشترک)</option>` : ''}</select></label>
+      <div id="prod-vpn-fields" style="display:${target === 'ssh' ? 'none' : ''}"><label class="field"><span>پنل VPN</span><select class="input" id="prod-server">${panelServers.map(s => `<option value="${s.id}" ${prefill && Number(prefill.provision_server_id) === Number(s.id) ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></label></div>
+      <div id="prod-ssh-fields" style="display:${(target === 'ssh' || target === 'both') ? '' : 'none'}"><label class="field"><span>نود SSH</span><select class="input" id="prod-ssh-node">${sshNodes.map(n => `<option value="${n.id}" ${prefill && Number(prefill.provision_ssh_node_id) === Number(n.id) ? 'selected' : ''}>${esc(n.name)} · ${esc(n.host || '')}</option>`).join('')}</select><span class="card-sub">فقط Linux Agent فعال با حسابداری معتبر پشتیبانی می‌شود.</span></label></div>
       <label class="field field-row"><span>♾ مدت اعتبار نامحدود</span><input type="checkbox" id="prod-duration-unlimited" ${durUnlimited ? 'checked' : ''}></label>
       <label class="field"><span>حجم (GB) — ۰ = نامحدود</span><input class="input" id="prod-volume" type="number" min="0" step="1" placeholder="حجم (گیگابایت)" value="${prefill && prefill.auto_provision_volume_gb != null ? prefill.auto_provision_volume_gb : ''}" ${volUnlimited ? 'disabled' : ''}></label>
       <label class="field field-row"><span>♾ حجم نامحدود</span><input type="checkbox" id="prod-volume-unlimited" ${volUnlimited ? 'checked' : ''}></label>
@@ -3492,9 +3492,9 @@ function wireProductProvisionToggle(b) {
   }));
   const targetType = $('#prod-target-type', b);
   if (targetType) targetType.addEventListener('change', () => {
-    const isSSH = targetType.value === 'ssh';
-    if ($('#prod-vpn-fields', b)) $('#prod-vpn-fields', b).style.display = isSSH ? 'none' : '';
-    if ($('#prod-ssh-fields', b)) $('#prod-ssh-fields', b).style.display = isSSH ? '' : 'none';
+    const t = targetType.value;
+    if ($('#prod-vpn-fields', b)) $('#prod-vpn-fields', b).style.display = t === 'ssh' ? 'none' : '';
+    if ($('#prod-ssh-fields', b)) $('#prod-ssh-fields', b).style.display = (t === 'ssh' || t === 'both') ? '' : 'none';
   });
   const durUnlimitedCb = $('#prod-duration-unlimited', b);
   if (durUnlimitedCb) {
@@ -3523,6 +3523,13 @@ function readProductProvisionFields(b) {
   const auto_provision_volume_gb = volumeUnlimited ? 0 : Number($('#prod-volume', b).value);
   if (auto_provision_volume_gb < 0 || (!volumeUnlimited && !auto_provision_volume_gb)) {
     toast('برای ساخت خودکار، حجم معتبر یا حجم نامحدود را انتخاب کنید.', true); return { ok: false };
+  }
+  if (target === 'both') {
+    const provision_server_id = Number($('#prod-server', b)?.value || 0);
+    const provision_ssh_node_id = Number($('#prod-ssh-node', b)?.value || 0);
+    if (!provision_server_id) { toast('یک پنل VPN فعال انتخاب کنید.', true); return { ok: false }; }
+    if (!provision_ssh_node_id) { toast('یک نود SSH فعال انتخاب کنید.', true); return { ok: false }; }
+    return { ok: true, source: 'direct', provision_server_id, provision_ssh_node_id, auto_provision_volume_gb, duration_days };
   }
   if (target === 'ssh') {
     const provision_ssh_node_id = Number($('#prod-ssh-node', b)?.value || 0);
@@ -6730,7 +6737,17 @@ async function renderSSHManagement() {
   setContent(`
     <div class="hero" style="margin-bottom:16px"><div><h2>🔐 مدیریت SSH و سهمیه مشترک</h2><p class="card-sub">حساب‌های SSH و سرویس‌های VPN را به یک استخر سهمیه وصل کن. برای نود لینوکس، Agent باید جداگانه نصب و متغیر توکن در محیط سرویس بات تنظیم شده باشد.</p></div><button class="btn btn-primary" id="ssh-refresh">به‌روزرسانی</button></div>
     <div class="grid-2" style="gap:16px">
-      <div class="card"><div class="card-head"><h3>افزودن نود Linux Agent</h3></div>
+      <div class="card"><div class="card-head"><h3>⚡ نصب خودکار نود SSH</h3></div>
+        <div class="form-grid">
+          <label class="field"><span>نام نود</span><input class="input" id="ssh-auto-name" placeholder="Germany-SSH-1" maxlength="80"></label>
+          <label class="field"><span>آی‌پی سرور</span><input class="input" id="ssh-auto-host" placeholder="203.0.113.10" dir="ltr"></label>
+          <label class="field"><span>پورت SSH</span><input class="input" id="ssh-auto-port" type="number" min="1" max="65535" value="22"></label>
+          <label class="field"><span>رمز root</span><input class="input" id="ssh-auto-pass" type="password" autocomplete="off" dir="ltr"></label>
+          <button class="btn btn-primary" id="ssh-auto-install">نصب و راه‌اندازی خودکار</button>
+        </div>
+        <pre id="ssh-auto-log" class="mono" style="display:none;white-space:pre-wrap;margin-top:8px"></pre>
+        <p class="card-sub">سرور باید Ubuntu/Debian تازه باشد. همه‌چیز (نصب Agent، گواهی TLS، توکن، فایروال، تست حسابداری حجم) خودکار انجام می‌شود. رمز root فقط برای همین نصب استفاده می‌شود و ذخیره نمی‌شود.</p>
+        <details style="margin-top:8px"><summary class="card-sub">نصب دستی (پیشرفته)</summary>
         <div class="form-grid">
           <label class="field"><span>نام نود</span><input class="input" id="ssh-node-name" placeholder="Germany-SSH-1" maxlength="80"></label>
           <label class="field"><span>آدرس SSH</span><input class="input" id="ssh-node-host" placeholder="203.0.113.10"></label>
@@ -6741,6 +6758,7 @@ async function renderSSHManagement() {
           <button class="btn btn-primary" id="ssh-node-create">ثبت نود</button>
         </div>
         <p class="card-sub">توکن خام در دیتابیس ذخیره نمی‌شود. حساب‌ها روی پورت اختصاصی ۲۰۰۰۰ تا ۳۹۹۹۹ اجرا می‌شوند؛ این بازه را در فایروال باز کن. متغیر محیطی را در سرویس ShopVPN تنظیم و سرویس را restart کن.</p>
+      </details>
       </div>
       <div class="card"><div class="card-head"><h3>ساخت استخر سهمیه مشترک</h3></div>
         <div class="form-grid">
@@ -6767,12 +6785,31 @@ async function renderSSHManagement() {
       </div>
     </div>
     <div class="grid-2" style="gap:16px;margin-top:16px">
-      <div class="card"><div class="card-head"><h3>نودها</h3></div><div class="admin-list">${nodes.length ? nodes.map(n=>`<div class="admin-list-row"><div><b>${esc(n.name)}</b><div class="card-sub mono">${esc(n.host)}:${Number(n.port)} · ${esc(n.agent_url||'')}</div><div class="card-sub">وضعیت: ${esc(statusFa(n.status))}${n.last_error ? ' · '+esc(n.last_error) : ''}</div></div><button class="btn btn-sm" data-ssh-test-node="${Number(n.id)}">تست اتصال</button></div>`).join('') : '<div class="empty-state">هنوز نودی ثبت نشده است.</div>'}</div></div>
+      <div class="card"><div class="card-head"><h3>نودها</h3></div><div class="admin-list">${nodes.length ? nodes.map(n=>`<div class="admin-list-row"><div><b>${esc(n.name)}</b><div class="card-sub mono">${esc(n.host)}:${Number(n.port)} · ${esc(n.agent_url||'')}</div><div class="card-sub">وضعیت: ${esc(statusFa(n.status))}${n.last_error ? ' · '+esc(n.last_error) : ''}</div></div><div style="display:flex;gap:6px"><button class="btn btn-sm" data-ssh-test-node="${Number(n.id)}">تست اتصال</button><button class="btn btn-sm btn-danger" data-ssh-del-node="${Number(n.id)}">حذف</button></div></div>`).join('') : '<div class="empty-state">هنوز نودی ثبت نشده است.</div>'}</div></div>
       <div class="card"><div class="card-head"><h3>استخرهای سهمیه</h3><button class="btn btn-sm" id="ssh-reconcile">پایش و اعمال سهمیه</button></div><div class="admin-list">${pools.length ? pools.map(p=>{const u=p.usage||{};return `<div class="admin-list-row"><div><b>#${Number(p.id)} · ${esc(p.label||'')}</b><div class="card-sub">کاربر ${Number(p.user_id)} · ${fmtBytes(u.used_bytes)} از ${Number(p.limit_bytes||0) ? fmtBytes(p.limit_bytes) : 'نامحدود'}</div><div class="card-sub">وضعیت: ${esc(statusFa(p.status))} · اعضا: ${(p.members||[]).length}</div></div><button class="btn btn-sm" data-ssh-pool-copy="${Number(p.id)}">شناسه</button></div>`}).join('') : '<div class="empty-state">استخر سهمیه‌ای وجود ندارد.</div>'}</div></div>
     </div>
     <div class="card" style="margin-top:16px"><div class="card-head"><h3>حساب‌های SSH</h3></div><div class="admin-list">${accounts.length ? accounts.map(a=>`<div class="admin-list-row"><div><b>${esc(a.username)}</b><div class="card-sub mono">${esc(a.host)}:${Number(a.port)} · شناسه ${esc(a.account_id)}</div><div class="card-sub">کاربر ${Number(a.user_id)} · نود ${Number(a.node_id)} · استخر ${a.quota_pool_id ? '#'+Number(a.quota_pool_id) : 'ندارد'} · ${esc(statusFa(a.status))}</div></div><div class="admin-list-row-actions"><button class="btn btn-sm" data-ssh-account-action="enable" data-ssh-account-id="${esc(a.account_id)}">فعال</button><button class="btn btn-sm" data-ssh-account-action="disable" data-ssh-account-id="${esc(a.account_id)}">غیرفعال</button><button class="btn btn-danger btn-sm" data-ssh-account-action="delete" data-ssh-account-id="${esc(a.account_id)}">حذف</button></div></div>`).join('') : '<div class="empty-state">هنوز حساب SSH ثبت نشده است.</div>'}</div></div>
   `);
   $('#ssh-refresh')?.addEventListener('click', () => renderSSHManagement());
+  $('#ssh-auto-install')?.addEventListener('click', async e => {
+    const btn=e.currentTarget, logEl=$('#ssh-auto-log');
+    const name=$('#ssh-auto-name').value.trim(), host=$('#ssh-auto-host').value.trim(), password=$('#ssh-auto-pass').value;
+    if(!name||!host||!password){toast('نام، آی‌پی و رمز root را وارد کنید.',true);return;}
+    btn.disabled=true; logEl.style.display=''; logEl.textContent='شروع نصب...';
+    try {
+      const r=await apiPost('/ssh/nodes/auto-install',{name,host,ssh_port:Number($('#ssh-auto-port').value)||22,username:'root',password});
+      $('#ssh-auto-pass').value='';
+      for(let i=0;i<400;i++){
+        await new Promise(res=>setTimeout(res,2000));
+        const j=await apiGet(`/ssh/nodes/install-jobs/${r.job_id}`);
+        logEl.textContent=(j.log||[]).join('\n');
+        if(j.status==='done'){toast(j.warning?('نود نصب شد؛ '+j.warning):'نود با موفقیت نصب و فعال شد.',!!j.warning);await renderSSHManagement();return;}
+        if(j.status==='error'){logEl.textContent+='\n❌ '+(j.error||'خطا');toast(j.error||'نصب ناموفق بود.',true);btn.disabled=false;return;}
+      }
+      toast('نصب طولانی شد؛ بعداً وضعیت نودها را بررسی کنید.',true);btn.disabled=false;
+    } catch(err){handleErr(err);btn.disabled=false;}
+  });
+  $$('[data-ssh-del-node]',content()).forEach(btn=>btn.addEventListener('click',async()=>{if(!confirm('این نود حذف شود؟'))return;btn.disabled=true;try{await apiDelete(`/ssh/nodes/${Number(btn.dataset.sshDelNode)}`);toast('نود حذف شد.');await renderSSHManagement();}catch(err){handleErr(err);btn.disabled=false;}}));
   $('#ssh-node-create')?.addEventListener('click', async e => {
     const btn=e.currentTarget; btn.disabled=true;
     try { await apiPost('/ssh/nodes',{name:$('#ssh-node-name').value.trim(),host:$('#ssh-node-host').value.trim(),port:Number($('#ssh-node-port').value),agent_url:$('#ssh-agent-url').value.trim(),secret_env:$('#ssh-secret-env').value.trim(),allow_insecure_http:$('#ssh-http-ok').checked}); toast('نود ثبت شد. حالا اتصال را تست کن.'); await renderSSHManagement(); }
