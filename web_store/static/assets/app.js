@@ -211,6 +211,10 @@
     S.user = u || null;
     $("loginBtn").hidden = !!u;
     $("accountBtn").hidden = !u;
+    $("logoutBtn").hidden = !u;
+  }
+  function doLogout() {
+    api("/api/web/logout", { method: "POST" }).catch(noop).then(function () { stopTimers(); dropToken(); go("#/"); });
   }
   function dropToken() { S.token = ""; store.del("sv-token"); setUser(null); }
   function loadSession() {
@@ -229,7 +233,7 @@
   }
   var cfgP = null;
   function loadConfig() {
-    if (!cfgP) cfgP = api("/api/web/security-config").then(function (c) { S.cfg = c || S.cfg; return S.cfg; }).catch(function () { return S.cfg; });
+    if (!cfgP) cfgP = api("/api/web/security-config").then(function (c) { S.cfg = c || S.cfg; return S.cfg; }).catch(function () { cfgP = null; return S.cfg; });
     return cfgP;
   }
 
@@ -588,7 +592,7 @@
           verifyBtn.disabled = false;
         });
       });
-      panel.appendChild(h("details", { class: "faq" }, h("summary", { text: t("email_toggle") }),
+      panel.appendChild(h("details", { class: "faq-d", open: true }, h("summary", { text: t("email_toggle") }),
         h("div", { class: "stack", style: { paddingBottom: "16px" } },
           h("label", { class: "field" }, h("span", { text: t("email_label") }), email), tsStart, sendBtn, msg, codeWrap)));
     });
@@ -1180,7 +1184,7 @@
     }
     card.appendChild(h("button", {
       class: "btn danger", type: "button", text: t("logout"),
-      onclick: function () { api("/api/web/logout", { method: "POST" }).catch(noop).then(function () { dropToken(); go("#/"); }); }
+      onclick: doLogout
     }));
     box.appendChild(card);
   }
@@ -1261,6 +1265,7 @@
       root.setAttribute("data-theme", next);
       store.set("sv-theme", next);
     });
+    $("logoutBtn").addEventListener("click", doLogout);
     $("langBtn").addEventListener("click", function () { location.href = (lang === "fa" ? "/en/" : "/") + location.hash; });
     $("sheetClose").addEventListener("click", closeSheet);
     if (new URLSearchParams(location.search).get("preview") === "1") {

@@ -310,3 +310,9 @@ button.list-item { cursor: pointer; }
 
 .tunnel .s1 { stop-color: var(--accent); }
 .tunnel .s2 { stop-color: var(--accent-2); }
+
+/* ورود/ثبت‌نام ایمیلی: بخش بازشونده داخل کارت ورود */
+.faq-d { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-m); padding: 0 20px; margin-top: 8px; }
+.faq-d summary { cursor: pointer; padding: 14px 0; font-weight: 600; }
+.btn.danger.small { white-space: nowrap; }
+@media (max-width: 480px) { .tools { gap: 6px; } .btn.small { padding: 0 12px; } }
