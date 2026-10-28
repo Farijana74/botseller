@@ -49,6 +49,8 @@ def _web_catalog_payload(db: Database) -> list:
                 "price": p["price"],
                 "original_price": compare_price_for(p) or None,
                 "description": p["description"],
+                "duration_days": p.get("duration_days") if hasattr(p, "get") else p["duration_days"],
+                "volume_gb": p.get("auto_provision_volume_gb") if hasattr(p, "get") else p["auto_provision_volume_gb"],
                 "in_stock": in_stock,
             })
         if products:

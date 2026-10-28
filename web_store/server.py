@@ -18,7 +18,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from starlette.middleware.gzip import GZipMiddleware
 
-from asset_versioning import ApiNoStoreMiddleware
+from asset_versioning import ApiNoStoreMiddleware, static_version
 from i18n import normalize_language, reset_language, set_language
 from miniapp import server as core
 from web_store.routes import router as web_router
@@ -154,6 +154,7 @@ def _render_index(lang: str, request: Request) -> HTMLResponse:
         base = f"{proto}://{host}".rstrip("/")
     canonical = base + ("/" if lang == "fa" else "/en/")
     page = INDEX_FILE.read_text(encoding="utf-8")
+    asset_ver = static_version(str(STATIC_DIR / "assets"))
     values = {
         "LANG": meta["lang"],
         "DIR": meta["dir"],
@@ -163,6 +164,7 @@ def _render_index(lang: str, request: Request) -> HTMLResponse:
         "ALT_FA": html_lib.escape(base + "/"),
         "ALT_EN": html_lib.escape(base + "/en/"),
         "OG_IMAGE": html_lib.escape(base + "/assets/og-image.png"),
+        "ASSET_VERSION": html_lib.escape(asset_ver),
     }
     for key, value in values.items():
         page = page.replace("{{" + key + "}}", value)
