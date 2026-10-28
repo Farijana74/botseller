@@ -340,6 +340,17 @@ class UsageMixin:
             sql = "SELECT * FROM ssh_nodes" + (" WHERE status='active'" if active_only else "") + " ORDER BY id DESC"
             return [dict(r) for r in conn.execute(sql).fetchall()]
 
+    def delete_ssh_node(self, node_id: int) -> bool:
+        """حذف نود؛ فقط وقتی هیچ حساب غیرحذف‌شده‌ای روی آن نیست و هیچ محصولی به آن وصل نیست."""
+        with self._get_conn() as conn:
+            if conn.execute("SELECT 1 FROM ssh_accounts WHERE node_id=? AND status!='deleted' LIMIT 1", (int(node_id),)).fetchone():
+                raise ValueError("روی این نود هنوز حساب SSH فعال وجود دارد.")
+            if conn.execute("SELECT 1 FROM products WHERE provision_ssh_node_id=? LIMIT 1", (int(node_id),)).fetchone():
+                raise ValueError("یک محصول به این نود وصل است؛ ابتدا محصول را تغییر دهید.")
+            conn.execute("DELETE FROM ssh_accounts WHERE node_id=?", (int(node_id),))
+            cur = conn.execute("DELETE FROM ssh_nodes WHERE id=?", (int(node_id),))
+            return cur.rowcount > 0
+
     def update_ssh_node_status(self, node_id: int, status: str, last_error: str = None) -> bool:
         if status not in {"pending", "active", "degraded", "disabled", "error"}:
             raise ValueError("وضعیت نود نامعتبر است")
