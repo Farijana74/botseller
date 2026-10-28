@@ -390,7 +390,6 @@ const NAV = [
   { key: 'reseller_tiers', label: 'سطوح نمایندگی', icon: 'resellers', role: 'resellers', section: 'شبکه و همکاران' },
   { key: 'panels', label: 'پنل‌های VPN', icon: 'panels', role: 'panels', section: 'شبکه و همکاران' },
   { key: 'ssh', label: 'نودها و سهمیه SSH', icon: 'system', role: 'panels', section: 'شبکه و همکاران' },
-  { key: 'ssh-install', label: 'نصب نود SSH', icon: 'system', role: 'panels', section: 'شبکه و همکاران' },
 
   // تنظیمات و سیستم — نگهداری، دسترسی و پیکربندی
   { key: 'settings', label: 'تنظیمات و برندینگ', icon: 'settings', role: 'settings', section: 'تنظیمات و سیستم' },
@@ -941,7 +940,6 @@ async function renderPage(tab) {
       case 'reseller_tiers': return await renderResellerTiers();
       case 'panels': return await renderPanels();
       case 'ssh': return await renderSSHManagement();
-      case 'ssh-install': return await renderSSHInstall();
       case 'system': return await renderSystem();
       case 'settings': return await renderSettings();
       case 'languages': return await renderLanguages();
@@ -6692,39 +6690,7 @@ function wirePanelReorder(servers) {
   }));
 }
 
-async function renderSSHInstall() {
-  setContent(`
-    <div class="hero" style="margin-bottom:16px"><div><h2>🧩 نصب نود SSH</h2><p class="card-sub">این بسته را فقط روی سرور مقصدی اجرا کن که قرار است نود SSH باشد؛ روی سرور اصلی بات یا پنل اجرا نکن.</p></div><button class="btn btn-primary" id="ssh-install-download">⬇️ دانلود بسته نصب</button></div>
-    <div class="card"><h3>۱. دانلود و انتقال بسته</h3><p>بسته فقط شامل Agent و فایل‌های سرویس موردنیاز نود است، نه کل پروژه ShopVPN. ابتدا آن را دانلود کن و سپس به سرور مقصد منتقل کن.</p>
-      <pre class="mono" style="white-space:pre-wrap;overflow-wrap:anywhere">scp ShopVPN-SSH-Node.zip root@NODE_IP:/root/</pre>
-      <p class="card-sub">به‌جای <code>NODE_IP</code> آدرس IP سرور مقصد را قرار بده. دستور scp را از کامپیوتر خودت اجرا کن.</p>
-    </div>
-    <div class="card" style="margin-top:16px"><h3>۲. نصب روی سرور مقصد</h3><p>با SSH وارد همان سرور مقصد شو و دستورات زیر را اجرا کن:</p>
-      <pre id="ssh-install-commands" class="mono" style="white-space:pre-wrap;overflow-wrap:anywhere">apt-get update
-apt-get install -y unzip
-mkdir -p /opt/shopvpn-deploy
-unzip -o /root/ShopVPN-SSH-Node.zip -d /opt/shopvpn-deploy
-cd /opt/shopvpn-deploy
-bash deploy/install-shopvpn-ssh-agent.sh</pre>
-      <button class="btn" id="ssh-install-copy">کپی دستورات نصب</button>
-    </div>
-    <div class="card" style="margin-top:16px"><h3>۳. بررسی نصب</h3><pre class="mono" style="white-space:pre-wrap;overflow-wrap:anywhere">systemctl status shopvpn-ssh-agent --no-pager
-curl -i http://127.0.0.1:8765/health
-ss -lntp | grep 8765</pre></div>
-    <div class="card" style="margin-top:16px;border-inline-start:4px solid var(--warning, #d97706)"><h3>⚠️ قبل از استفاده</h3><ul><li>نصب‌کننده تنظیمات OpenSSH را برای محدودکردن حساب‌های ShopVPN تغییر می‌دهد و قبل از اعمال تغییر، صحت پیکربندی را بررسی می‌کند. نشست SSH فعلی را نبند و کنسول اضطراری VPS را در دسترس داشته باش.</li><li>Agent به‌صورت پیش‌فرض فقط روی <code>127.0.0.1:8765</code> گوش می‌دهد؛ پورت آن را مستقیم روی اینترنت عمومی باز نکن. برای اتصال امن از شبکه خصوصی/WireGuard یا پراکسی TLS محدودشده به IP سرور اصلی استفاده کن.</li><li>حسابداری ترافیک در شروع خاموش است. تا وقتی شمارنده‌ها را با انتقال آزمایشی بررسی نکرده‌ای، سرویس حجمی SSH نفروش.</li><li>این نصب‌کننده برای Debian/Ubuntu است. پس از نصب، از «نودها و سهمیه SSH» نود را ثبت و اتصال را تست کن.</li></ul></div>
-  `);
-  $('#ssh-install-download')?.addEventListener('click', async e => {
-    const btn=e.currentTarget; btn.disabled=true;
-    try {
-      const res=await fetch('/api/ssh/install-package',{credentials:'include'});
-      if(res.status===401){showLogin();throw new Error('نشست پنل منقضی شده است.');}
-      if(!res.ok){const d=await res.json().catch(()=>({}));throw new Error(formatApiError(d.detail||'دانلود بسته نصب ناموفق بود.'));}
-      const blob=await res.blob(); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='ShopVPN-SSH-Node.zip'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000); toast('بسته نصب نود آماده شد.');
-    } catch(err){handleErr(err);} finally {btn.disabled=false;}
-  });
-  $('#ssh-install-copy')?.addEventListener('click',async()=>{const text=$('#ssh-install-commands')?.textContent||'';try{await navigator.clipboard.writeText(text);toast('دستورات نصب کپی شد.');}catch(_){toast('کپی خودکار انجام نشد؛ دستورات را دستی انتخاب کن.',true);}});
-}
-
+let sshTab = 'nodes';
 async function renderSSHManagement() {
   const d = await apiGet('/ssh/overview');
   const nodes = d.nodes || [], pools = d.pools || [], accounts = d.accounts || [];
@@ -6734,108 +6700,131 @@ async function renderSSHManagement() {
     return `${(n / 1024 ** 3).toFixed(2)} GB`;
   };
   const statusFa = s => ({active:'فعال',pending:'در انتظار',error:'خطا',degraded:'ناپایدار',disabled:'غیرفعال',stale:'داده قدیمی',exceeded:'سهمیه تمام‌شده',quota_exceeded:'سهمیه تمام‌شده',expired:'منقضی',deleted:'حذف‌شده'}[s] || s || 'نامشخص');
-  setContent(`
-    <div class="hero" style="margin-bottom:16px"><div><h2>🔐 مدیریت SSH و سهمیه مشترک</h2><p class="card-sub">حساب‌های SSH و سرویس‌های VPN را به یک استخر سهمیه وصل کن. برای نود لینوکس، Agent باید جداگانه نصب و متغیر توکن در محیط سرویس بات تنظیم شده باشد.</p></div><button class="btn btn-primary" id="ssh-refresh">به‌روزرسانی</button></div>
-    <div class="grid-2" style="gap:16px">
-      <div class="card"><div class="card-head"><h3>⚡ نصب خودکار نود SSH</h3></div>
-        <div class="form-grid">
-          <label class="field"><span>نام نود</span><input class="input" id="ssh-auto-name" placeholder="Germany-SSH-1" maxlength="80"></label>
-          <label class="field"><span>آی‌پی سرور</span><input class="input" id="ssh-auto-host" placeholder="203.0.113.10" dir="ltr"></label>
-          <label class="field"><span>پورت SSH</span><input class="input" id="ssh-auto-port" type="number" min="1" max="65535" value="22"></label>
-          <label class="field"><span>رمز root</span><input class="input" id="ssh-auto-pass" type="password" autocomplete="off" dir="ltr"></label>
-          <button class="btn btn-primary" id="ssh-auto-install">نصب و راه‌اندازی خودکار</button>
-        </div>
-        <pre id="ssh-auto-log" class="mono" style="display:none;white-space:pre-wrap;margin-top:8px"></pre>
-        <p class="card-sub">سرور باید Ubuntu/Debian تازه باشد. همه‌چیز (نصب Agent، گواهی TLS، توکن، فایروال، تست حسابداری حجم) خودکار انجام می‌شود. رمز root فقط برای همین نصب استفاده می‌شود و ذخیره نمی‌شود.</p>
-        <details style="margin-top:8px"><summary class="card-sub">نصب دستی (پیشرفته)</summary>
-        <div class="form-grid">
-          <label class="field"><span>نام نود</span><input class="input" id="ssh-node-name" placeholder="Germany-SSH-1" maxlength="80"></label>
-          <label class="field"><span>آدرس SSH</span><input class="input" id="ssh-node-host" placeholder="203.0.113.10"></label>
-          <label class="field"><span>پورت SSH پایه (برای سازگاری)</span><input class="input" id="ssh-node-port" type="number" min="1" max="65535" value="22"></label>
-          <label class="field"><span>آدرس Agent</span><input class="input" id="ssh-agent-url" placeholder="https://ssh-agent.example.com"></label>
-          <label class="field"><span>نام متغیر محیطی توکن</span><input class="input" id="ssh-secret-env" placeholder="SHOPVPN_AGENT_TOKEN"></label>
-          <label class="field" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="ssh-http-ok"> HTTP فقط در شبکه خصوصی (ناامن)</label>
-          <button class="btn btn-primary" id="ssh-node-create">ثبت نود</button>
-        </div>
-        <p class="card-sub">توکن خام در دیتابیس ذخیره نمی‌شود. حساب‌ها روی پورت اختصاصی ۲۰۰۰۰ تا ۳۹۹۹۹ اجرا می‌شوند؛ این بازه را در فایروال باز کن. متغیر محیطی را در سرویس ShopVPN تنظیم و سرویس را restart کن.</p>
-      </details>
-      </div>
-      <div class="card"><div class="card-head"><h3>ساخت استخر سهمیه مشترک</h3></div>
-        <div class="form-grid">
-          <label class="field"><span>شناسه کاربر تلگرام</span><input class="input" id="ssh-pool-user" type="number" min="1" placeholder="123456789"></label>
-          <label class="field"><span>سقف کل (GB) — صفر یعنی نامحدود</span><input class="input" id="ssh-pool-limit" type="number" min="0" step="0.1" value="50"></label>
-          <label class="field"><span>انقضا (ISO اختیاری)</span><input class="input" id="ssh-pool-expiry" placeholder="2026-12-31T23:59:59+00:00"></label>
-          <label class="field"><span>عنوان</span><input class="input" id="ssh-pool-label" value="سهمیه مشترک VPN + SSH" maxlength="100"></label>
-          <button class="btn btn-primary" id="ssh-pool-create">ساخت استخر</button>
-        </div>
-        <hr>
-        <div class="card-head"><h3>اتصال کانفیگ VPN موجود</h3></div>
-        <div class="form-grid"><label class="field"><span>شناسه استخر</span><input class="input" id="ssh-attach-pool" type="number" min="1"></label><label class="field"><span>شناسه کانفیگ VPN</span><input class="input" id="ssh-attach-config" type="number" min="1"></label><button class="btn" id="ssh-attach-vpn">اتصال VPN به استخر</button></div>
-      </div>
+  const tabs = [['nodes','نودها',nodes.length],['accounts','حساب‌ها',accounts.length],['pools','استخرها',pools.length]];
+  const tabBar = `<div class="toolbar" style="gap:8px;flex-wrap:wrap">${tabs.map(([k,l,c])=>`<button class="btn btn-sm ${sshTab===k?'btn-primary':''}" data-ssh-tab="${k}">${l} (${c})</button>`).join('')}<span style="flex:1"></span>${
+    sshTab==='nodes' ? '<button class="btn btn-primary btn-sm" id="ssh-add-node">+ افزودن نود</button>' :
+    sshTab==='accounts' ? '<button class="btn btn-primary btn-sm" id="ssh-add-account">+ ساخت حساب</button>' :
+    '<button class="btn btn-sm" id="ssh-reconcile">پایش و اعمال سهمیه</button><button class="btn btn-sm" id="ssh-attach-open">اتصال VPN به استخر</button><button class="btn btn-primary btn-sm" id="ssh-add-pool">+ ساخت استخر</button>'}</div>`;
+
+  const nodesHtml = `<div class="card"><div class="table-wrap"><table>
+    <thead><tr><th>نام</th><th>آدرس</th><th>وضعیت</th><th>عملیات</th></tr></thead>
+    <tbody>${nodes.map(n=>`<tr>
+      <td>${esc(n.name)}</td>
+      <td class="mono" style="direction:ltr;text-align:right">${esc(n.host)}:${Number(n.port)}</td>
+      <td>${esc(statusFa(n.status))}${n.last_error ? `<div style="font-size:11px;color:#FB7185;margin-top:4px">${esc(n.last_error)}</div>` : ''}</td>
+      <td style="white-space:nowrap"><button class="btn btn-sm" data-ssh-test-node="${Number(n.id)}">تست اتصال</button> <button class="btn btn-sm" data-ssh-rename-node="${Number(n.id)}" data-ssh-node-name="${esc(n.name)}">تغییر نام</button> <button class="btn btn-danger btn-sm" data-ssh-del-node="${Number(n.id)}">حذف</button></td>
+    </tr>`).join('') || '<tr><td colspan="4" class="empty-state">هنوز نودی ثبت نشده است.</td></tr>'}</tbody></table></div></div>`;
+
+  const accountsHtml = `<div class="card"><div class="table-wrap"><table>
+    <thead><tr><th>نام کاربری</th><th>سرور</th><th>کاربر</th><th>استخر</th><th>وضعیت</th><th>عملیات</th></tr></thead>
+    <tbody>${accounts.map(a=>`<tr>
+      <td><b>${esc(a.username)}</b></td>
+      <td class="mono" style="direction:ltr;text-align:right">${esc(a.host)}:${Number(a.port)}</td>
+      <td>${Number(a.user_id)}</td>
+      <td>${a.quota_pool_id ? '#'+Number(a.quota_pool_id) : '—'}</td>
+      <td>${esc(statusFa(a.status))}</td>
+      <td style="white-space:nowrap"><button class="btn btn-sm" data-ssh-account-action="enable" data-ssh-account-id="${esc(a.account_id)}">فعال</button> <button class="btn btn-sm" data-ssh-account-action="disable" data-ssh-account-id="${esc(a.account_id)}">غیرفعال</button> <button class="btn btn-danger btn-sm" data-ssh-account-action="delete" data-ssh-account-id="${esc(a.account_id)}">حذف</button></td>
+    </tr>`).join('') || '<tr><td colspan="6" class="empty-state">هنوز حساب SSH ثبت نشده است.</td></tr>'}</tbody></table></div></div>`;
+
+  const poolsHtml = `<div class="card"><div class="table-wrap"><table>
+    <thead><tr><th>شناسه</th><th>عنوان</th><th>کاربر</th><th>مصرف</th><th>وضعیت</th><th>اعضا</th></tr></thead>
+    <tbody>${pools.map(p=>{const u=p.usage||{};return `<tr>
+      <td>#${Number(p.id)}</td><td>${esc(p.label||'')}</td><td>${Number(p.user_id)}</td>
+      <td>${fmtBytes(u.used_bytes)} از ${Number(p.limit_bytes||0) ? fmtBytes(p.limit_bytes) : 'نامحدود'}</td>
+      <td>${esc(statusFa(p.status))}</td><td>${(p.members||[]).length}</td>
+    </tr>`}).join('') || '<tr><td colspan="6" class="empty-state">استخر سهمیه‌ای وجود ندارد.</td></tr>'}</tbody></table></div></div>`;
+
+  setContent(tabBar + (sshTab==='nodes' ? nodesHtml : sshTab==='accounts' ? accountsHtml : poolsHtml));
+
+  $$('[data-ssh-tab]',content()).forEach(b=>b.addEventListener('click',()=>{sshTab=b.dataset.sshTab;renderSSHManagement();}));
+
+  // ---- افزودن نود (نصب خودکار) ----
+  $('#ssh-add-node')?.addEventListener('click',()=>openModal('افزودن نود SSH',`
+    <div class="form-grid">
+      <label class="field"><span>نام نود</span><input class="input" id="ssh-auto-name" placeholder="Germany-SSH-1" maxlength="80"></label>
+      <label class="field"><span>آی‌پی سرور</span><input class="input" id="ssh-auto-host" placeholder="203.0.113.10" dir="ltr"></label>
+      <label class="field"><span>پورت SSH</span><input class="input" id="ssh-auto-port" type="number" min="1" max="65535" value="22"></label>
+      <label class="field"><span>رمز root</span><input class="input" id="ssh-auto-pass" type="password" autocomplete="off" dir="ltr"></label>
+      <button class="btn btn-primary" id="ssh-auto-install">نصب و راه‌اندازی خودکار</button>
     </div>
-    <div class="card" style="margin-top:16px"><div class="card-head"><h3>ساخت حساب SSH</h3></div>
-      <div class="form-grid">
-        <label class="field"><span>نود فعال</span><select class="input" id="ssh-account-node"><option value="">انتخاب نود</option>${nodes.map(n=>`<option value="${Number(n.id)}">${esc(n.name)} · #${Number(n.id)}</option>`).join('')}</select></label>
-        <label class="field"><span>شناسه کاربر</span><input class="input" id="ssh-account-user" type="number" min="1"></label>
-        <label class="field"><span>نام کاربری SSH</span><input class="input" id="ssh-account-username" maxlength="32" placeholder="user123"></label>
-        <label class="field"><span>سقف مستقل (GB) — بدون استخر</span><input class="input" id="ssh-account-limit" type="number" min="0" step="0.1" value="0"></label>
-        <label class="field"><span>مدت (روز)</span><input class="input" id="ssh-account-days" type="number" min="0" value="30"></label>
-        <label class="field"><span>استخر مشترک (اختیاری)</span><select class="input" id="ssh-account-pool"><option value="">بدون استخر</option>${pools.filter(p=>p.status==='active').map(p=>`<option value="${Number(p.id)}">#${Number(p.id)} · کاربر ${Number(p.user_id)} · ${esc(p.label||'')}</option>`).join('')}</select></label>
-        <button class="btn btn-primary" id="ssh-account-create">ساخت حساب</button>
-      </div>
-    </div>
-    <div class="grid-2" style="gap:16px;margin-top:16px">
-      <div class="card"><div class="card-head"><h3>نودها</h3></div><div class="admin-list">${nodes.length ? nodes.map(n=>`<div class="admin-list-row"><div><b>${esc(n.name)}</b><div class="card-sub mono">${esc(n.host)}:${Number(n.port)} · ${esc(n.agent_url||'')}</div><div class="card-sub">وضعیت: ${esc(statusFa(n.status))}${n.last_error ? ' · '+esc(n.last_error) : ''}</div></div><div style="display:flex;gap:6px"><button class="btn btn-sm" data-ssh-rename-node="${Number(n.id)}" data-ssh-node-name="${esc(n.name)}">تغییر نام</button><button class="btn btn-sm" data-ssh-test-node="${Number(n.id)}">تست اتصال</button><button class="btn btn-sm btn-danger" data-ssh-del-node="${Number(n.id)}">حذف</button></div></div>`).join('') : '<div class="empty-state">هنوز نودی ثبت نشده است.</div>'}</div></div>
-      <div class="card"><div class="card-head"><h3>استخرهای سهمیه</h3><button class="btn btn-sm" id="ssh-reconcile">پایش و اعمال سهمیه</button></div><div class="admin-list">${pools.length ? pools.map(p=>{const u=p.usage||{};return `<div class="admin-list-row"><div><b>#${Number(p.id)} · ${esc(p.label||'')}</b><div class="card-sub">کاربر ${Number(p.user_id)} · ${fmtBytes(u.used_bytes)} از ${Number(p.limit_bytes||0) ? fmtBytes(p.limit_bytes) : 'نامحدود'}</div><div class="card-sub">وضعیت: ${esc(statusFa(p.status))} · اعضا: ${(p.members||[]).length}</div></div><button class="btn btn-sm" data-ssh-pool-copy="${Number(p.id)}">شناسه</button></div>`}).join('') : '<div class="empty-state">استخر سهمیه‌ای وجود ندارد.</div>'}</div></div>
-    </div>
-    <div class="card" style="margin-top:16px"><div class="card-head"><h3>حساب‌های SSH</h3></div><div class="admin-list">${accounts.length ? accounts.map(a=>`<div class="admin-list-row"><div><b>${esc(a.username)}</b><div class="card-sub mono">${esc(a.host)}:${Number(a.port)} · شناسه ${esc(a.account_id)}</div><div class="card-sub">کاربر ${Number(a.user_id)} · نود ${Number(a.node_id)} · استخر ${a.quota_pool_id ? '#'+Number(a.quota_pool_id) : 'ندارد'} · ${esc(statusFa(a.status))}</div></div><div class="admin-list-row-actions"><button class="btn btn-sm" data-ssh-account-action="enable" data-ssh-account-id="${esc(a.account_id)}">فعال</button><button class="btn btn-sm" data-ssh-account-action="disable" data-ssh-account-id="${esc(a.account_id)}">غیرفعال</button><button class="btn btn-danger btn-sm" data-ssh-account-action="delete" data-ssh-account-id="${esc(a.account_id)}">حذف</button></div></div>`).join('') : '<div class="empty-state">هنوز حساب SSH ثبت نشده است.</div>'}</div></div>
-  `);
-  $('#ssh-refresh')?.addEventListener('click', () => renderSSHManagement());
-  $('#ssh-auto-install')?.addEventListener('click', async e => {
-    const btn=e.currentTarget, logEl=$('#ssh-auto-log');
-    const name=$('#ssh-auto-name').value.trim(), host=$('#ssh-auto-host').value.trim(), password=$('#ssh-auto-pass').value;
-    if(!name||!host||!password){toast('نام، آی‌پی و رمز root را وارد کنید.',true);return;}
-    btn.disabled=true; logEl.style.display=''; logEl.textContent='شروع نصب...';
-    try {
-      const r=await apiPost('/ssh/nodes/auto-install',{name,host,ssh_port:Number($('#ssh-auto-port').value)||22,username:'root',password});
-      $('#ssh-auto-pass').value='';
-      for(let i=0;i<400;i++){
-        await new Promise(res=>setTimeout(res,2000));
-        const j=await apiGet(`/ssh/nodes/install-jobs/${r.job_id}`);
-        logEl.textContent=(j.log||[]).join('\n');
-        if(j.status==='done'){toast(j.warning?('نود نصب شد؛ '+j.warning):'نود با موفقیت نصب و فعال شد.',!!j.warning);await renderSSHManagement();return;}
-        if(j.status==='error'){logEl.textContent+='\n❌ '+(j.error||'خطا');toast(j.error||'نصب ناموفق بود.',true);btn.disabled=false;return;}
-      }
-      toast('نصب طولانی شد؛ بعداً وضعیت نودها را بررسی کنید.',true);btn.disabled=false;
-    } catch(err){handleErr(err);btn.disabled=false;}
-  });
+    <pre id="ssh-auto-log" class="mono" style="display:none;white-space:pre-wrap;margin-top:8px"></pre>
+    <p class="card-sub">سرور باید Ubuntu/Debian تازه باشد. نصب Agent، گواهی TLS، توکن، فایروال و تست حسابداری حجم خودکار انجام می‌شود. رمز root فقط برای همین نصب استفاده می‌شود و ذخیره نمی‌شود.</p>`,(el,close)=>{
+    el.querySelector('#ssh-auto-install').addEventListener('click', async e => {
+      const btn=e.currentTarget, logEl=el.querySelector('#ssh-auto-log');
+      const name=el.querySelector('#ssh-auto-name').value.trim(), host=el.querySelector('#ssh-auto-host').value.trim(), password=el.querySelector('#ssh-auto-pass').value;
+      if(!name||!host||!password){toast('نام، آی‌پی و رمز root را وارد کنید.',true);return;}
+      btn.disabled=true; logEl.style.display=''; logEl.textContent='شروع نصب...';
+      try {
+        const r=await apiPost('/ssh/nodes/auto-install',{name,host,ssh_port:Number(el.querySelector('#ssh-auto-port').value)||22,username:'root',password});
+        el.querySelector('#ssh-auto-pass').value='';
+        for(let i=0;i<400;i++){
+          await new Promise(res=>setTimeout(res,2000));
+          const j=await apiGet(`/ssh/nodes/install-jobs/${r.job_id}`);
+          logEl.textContent=(j.log||[]).join('\n');
+          if(j.status==='done'){toast(j.warning?('نود نصب شد؛ '+j.warning):'نود با موفقیت نصب و فعال شد.',!!j.warning);close();await renderSSHManagement();return;}
+          if(j.status==='error'){logEl.textContent+='\n❌ '+(j.error||'خطا');toast(j.error||'نصب ناموفق بود.',true);btn.disabled=false;return;}
+        }
+        toast('نصب طولانی شد؛ بعداً وضعیت نودها را بررسی کنید.',true);btn.disabled=false;
+      } catch(err){handleErr(err);btn.disabled=false;}
+    });
+  }));
+
+  // ---- ساخت استخر ----
+  $('#ssh-add-pool')?.addEventListener('click',()=>openModal('ساخت استخر سهمیه مشترک',`
+    <div class="form-grid">
+      <label class="field"><span>شناسه کاربر تلگرام</span><input class="input" id="ssh-pool-user" type="number" min="1" placeholder="123456789"></label>
+      <label class="field"><span>سقف کل (GB) — صفر یعنی نامحدود</span><input class="input" id="ssh-pool-limit" type="number" min="0" step="0.1" value="50"></label>
+      <label class="field"><span>انقضا (ISO اختیاری)</span><input class="input" id="ssh-pool-expiry" placeholder="2026-12-31T23:59:59+00:00"></label>
+      <label class="field"><span>عنوان</span><input class="input" id="ssh-pool-label" value="سهمیه مشترک VPN + SSH" maxlength="100"></label>
+      <button class="btn btn-primary" id="ssh-pool-create">ساخت استخر</button>
+    </div>`,(el,close)=>{
+    el.querySelector('#ssh-pool-create').addEventListener('click', async e => {
+      const btn=e.currentTarget; btn.disabled=true;
+      try { const r=await apiPost('/ssh/pools',{user_id:Number(el.querySelector('#ssh-pool-user').value),limit_gb:Number(el.querySelector('#ssh-pool-limit').value),expires_at:el.querySelector('#ssh-pool-expiry').value.trim()||null,label:el.querySelector('#ssh-pool-label').value.trim()}); toast(`استخر #${r.pool_id} ساخته شد.`); close(); await renderSSHManagement(); }
+      catch(err){handleErr(err);btn.disabled=false;}
+    });
+  }));
+
+  // ---- اتصال VPN به استخر ----
+  $('#ssh-attach-open')?.addEventListener('click',()=>openModal('اتصال کانفیگ VPN به استخر',`
+    <div class="form-grid">
+      <label class="field"><span>استخر</span><select class="input" id="ssh-attach-pool"><option value="">انتخاب استخر</option>${pools.filter(p=>p.status==='active').map(p=>`<option value="${Number(p.id)}">#${Number(p.id)} · کاربر ${Number(p.user_id)} · ${esc(p.label||'')}</option>`).join('')}</select></label>
+      <label class="field"><span>شناسه کانفیگ VPN</span><input class="input" id="ssh-attach-config" type="number" min="1"></label>
+      <button class="btn btn-primary" id="ssh-attach-vpn">اتصال VPN به استخر</button>
+    </div>`,(el,close)=>{
+    el.querySelector('#ssh-attach-vpn').addEventListener('click', async e => {
+      const btn=e.currentTarget; btn.disabled=true;
+      try { await apiPost(`/ssh/pools/${Number(el.querySelector('#ssh-attach-pool').value)}/attach-vpn`,{custom_config_id:Number(el.querySelector('#ssh-attach-config').value)}); toast('کانفیگ VPN به استخر متصل شد.'); close(); await renderSSHManagement(); }
+      catch(err){handleErr(err);btn.disabled=false;}
+    });
+  }));
+
+  // ---- ساخت حساب ----
+  $('#ssh-add-account')?.addEventListener('click',()=>openModal('ساخت حساب SSH',`
+    <div class="form-grid">
+      <label class="field"><span>نود فعال</span><select class="input" id="ssh-account-node"><option value="">انتخاب نود</option>${nodes.map(n=>`<option value="${Number(n.id)}">${esc(n.name)} · #${Number(n.id)}</option>`).join('')}</select></label>
+      <label class="field"><span>شناسه کاربر</span><input class="input" id="ssh-account-user" type="number" min="1"></label>
+      <label class="field"><span>نام کاربری SSH</span><input class="input" id="ssh-account-username" maxlength="32" placeholder="user123"></label>
+      <label class="field"><span>سقف مستقل (GB) — بدون استخر</span><input class="input" id="ssh-account-limit" type="number" min="0" step="0.1" value="0"></label>
+      <label class="field"><span>مدت (روز)</span><input class="input" id="ssh-account-days" type="number" min="0" value="30"></label>
+      <label class="field"><span>استخر مشترک (اختیاری)</span><select class="input" id="ssh-account-pool"><option value="">بدون استخر</option>${pools.filter(p=>p.status==='active').map(p=>`<option value="${Number(p.id)}">#${Number(p.id)} · کاربر ${Number(p.user_id)} · ${esc(p.label||'')}</option>`).join('')}</select></label>
+      <button class="btn btn-primary" id="ssh-account-create">ساخت حساب</button>
+    </div>`,(el,close)=>{
+    el.querySelector('#ssh-account-create').addEventListener('click', async e => {
+      const btn=e.currentTarget; btn.disabled=true;
+      try { const poolVal=el.querySelector('#ssh-account-pool').value; const r=await apiPost('/ssh/accounts',{node_id:Number(el.querySelector('#ssh-account-node').value),user_id:Number(el.querySelector('#ssh-account-user').value),username:el.querySelector('#ssh-account-username').value.trim(),limit_gb:Number(el.querySelector('#ssh-account-limit').value),days:Number(el.querySelector('#ssh-account-days').value),quota_pool_id:poolVal?Number(poolVal):null});
+        close();
+        openModal('حساب SSH ساخته شد',`<p>نام کاربری: <b>${esc(r.username)}</b></p><p>سرور: <code>${esc(r.host)}:${Number(r.port)}</code></p><p>رمز عبور (فقط همین بار نمایش داده می‌شود):</p><input class="input" id="ssh-created-password" readonly value="${esc(r.password||'')}"><p class="card-sub">${esc(r.warning||'رمز را امن به کاربر تحویل بده؛ در دیتابیس ذخیره نشده است.')}</p><button class="btn btn-primary" id="ssh-copy-created-password">کپی رمز</button>`,(el2)=>{el2.querySelector('#ssh-copy-created-password')?.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(r.password||'');toast('رمز کپی شد.');}catch(_){el2.querySelector('#ssh-created-password')?.select();toast('رمز را دستی کپی کن.');}});});
+        await renderSSHManagement();
+      } catch(err){handleErr(err);btn.disabled=false;}
+    });
+  }));
+
+  // ---- عملیات روی نود/حساب/پایش ----
   $$('[data-ssh-rename-node]',content()).forEach(btn=>btn.addEventListener('click',async()=>{const name=(prompt('نام جدید نود (همین نام روی کانفیگ SSH کاربر دیده می‌شود):',btn.dataset.sshNodeName||'')||'').trim();if(!name||name===btn.dataset.sshNodeName)return;btn.disabled=true;try{await apiPost(`/ssh/nodes/${Number(btn.dataset.sshRenameNode)}/rename`,{name});toast('نام نود تغییر کرد.');await renderSSHManagement();}catch(err){handleErr(err);btn.disabled=false;}}));
   $$('[data-ssh-del-node]',content()).forEach(btn=>btn.addEventListener('click',async()=>{if(!confirm('این نود حذف شود؟'))return;btn.disabled=true;try{await apiDelete(`/ssh/nodes/${Number(btn.dataset.sshDelNode)}`);toast('نود حذف شد.');await renderSSHManagement();}catch(err){handleErr(err);btn.disabled=false;}}));
-  $('#ssh-node-create')?.addEventListener('click', async e => {
-    const btn=e.currentTarget; btn.disabled=true;
-    try { await apiPost('/ssh/nodes',{name:$('#ssh-node-name').value.trim(),host:$('#ssh-node-host').value.trim(),port:Number($('#ssh-node-port').value),agent_url:$('#ssh-agent-url').value.trim(),secret_env:$('#ssh-secret-env').value.trim(),allow_insecure_http:$('#ssh-http-ok').checked}); toast('نود ثبت شد. حالا اتصال را تست کن.'); await renderSSHManagement(); }
-    catch(err){handleErr(err);btn.disabled=false;}
-  });
-  $('#ssh-pool-create')?.addEventListener('click', async e => {
-    const btn=e.currentTarget; btn.disabled=true;
-    try { const r=await apiPost('/ssh/pools',{user_id:Number($('#ssh-pool-user').value),limit_gb:Number($('#ssh-pool-limit').value),expires_at:$('#ssh-pool-expiry').value.trim()||null,label:$('#ssh-pool-label').value.trim()}); toast(`استخر #${r.pool_id} ساخته شد.`); await renderSSHManagement(); }
-    catch(err){handleErr(err);btn.disabled=false;}
-  });
-  $('#ssh-attach-vpn')?.addEventListener('click', async e => {
-    const btn=e.currentTarget; btn.disabled=true;
-    try { await apiPost(`/ssh/pools/${Number($('#ssh-attach-pool').value)}/attach-vpn`,{custom_config_id:Number($('#ssh-attach-config').value)}); toast('کانفیگ VPN به استخر متصل شد.'); await renderSSHManagement(); }
-    catch(err){handleErr(err);btn.disabled=false;}
-  });
-  $('#ssh-account-create')?.addEventListener('click', async e => {
-    const btn=e.currentTarget; btn.disabled=true;
-    try { const poolVal=$('#ssh-account-pool').value; const r=await apiPost('/ssh/accounts',{node_id:Number($('#ssh-account-node').value),user_id:Number($('#ssh-account-user').value),username:$('#ssh-account-username').value.trim(),limit_gb:Number($('#ssh-account-limit').value),days:Number($('#ssh-account-days').value),quota_pool_id:poolVal?Number(poolVal):null});
-      openModal('حساب SSH ساخته شد',`<p>نام کاربری: <b>${esc(r.username)}</b></p><p>سرور: <code>${esc(r.host)}:${Number(r.port)}</code></p><p>رمز عبور (فقط همین بار نمایش داده می‌شود):</p><input class="input" id="ssh-created-password" readonly value="${esc(r.password||'')}"><p class="card-sub">${esc(r.warning||'رمز را امن به کاربر تحویل بده؛ در دیتابیس ذخیره نشده است.')}</p><button class="btn btn-primary" id="ssh-copy-created-password">کپی رمز</button>`,(el,close)=>{el.querySelector('#ssh-copy-created-password')?.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(r.password||'');toast('رمز کپی شد.');}catch(_){el.querySelector('#ssh-created-password')?.select();toast('رمز را دستی کپی کن.');}});});
-      await renderSSHManagement();
-    } catch(err){handleErr(err);btn.disabled=false;}
-  });
   $$('[data-ssh-test-node]',content()).forEach(btn=>btn.addEventListener('click',async()=>{btn.disabled=true;try{const r=await apiPost(`/ssh/nodes/${Number(btn.dataset.sshTestNode)}/test`,{});toast(r.ok?'اتصال Agent موفق بود.':'پاسخ Agent معتبر نیست.');await renderSSHManagement();}catch(err){handleErr(err);btn.disabled=false;}}));
   $$('[data-ssh-account-action]',content()).forEach(btn=>btn.addEventListener('click',async()=>{const action=btn.dataset.sshAccountAction;if(action==='delete'&&!confirm('حساب SSH حذف شود؟'))return;btn.disabled=true;try{await apiPost(`/ssh/accounts/${encodeURIComponent(btn.dataset.sshAccountId)}/action`,{action});toast('عملیات انجام شد.');await renderSSHManagement();}catch(err){handleErr(err);btn.disabled=false;}}));
-  $$('[data-ssh-pool-copy]',content()).forEach(btn=>btn.addEventListener('click',()=>{const id=btn.dataset.sshPoolCopy;try{navigator.clipboard.writeText(id);toast(`شناسه استخر ${id} کپی شد.`);}catch(_){toast(`شناسه استخر: ${id}`);}}));
   $('#ssh-reconcile')?.addEventListener('click',async e=>{const btn=e.currentTarget;btn.disabled=true;try{const r=await apiPost('/ssh/reconcile-once',{});const results=r.results||[];const failed=results.filter(x=>!x.enforcement_complete).length;const stale=results.filter(x=>x.state==='stale').length;toast(failed?`پایش انجام شد؛ ${failed} استخر نیازمند بررسی است.`:(stale?`${stale} استخر به‌علت گزارش مصرف قدیمی در حالت امن باقی ماند.`:'پایش سهمیه انجام شد.'));await renderSSHManagement();}catch(err){handleErr(err);btn.disabled=false;}});
 }
 
