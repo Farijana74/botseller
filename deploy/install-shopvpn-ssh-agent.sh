@@ -26,7 +26,7 @@ fi
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y python3 python3-aiohttp openssh-server nftables
+apt-get install -y python3 python3-aiohttp openssh-server nftables openssl
 
 install -d -o root -g root -m 0755 /opt/shopvpn /var/lib/shopvpn-ssh-agent /etc/shopvpn/sshd
 install -o root -g root -m 0755 "${AGENT_SOURCE}" /opt/shopvpn/ssh_node_agent.py

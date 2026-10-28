@@ -5,7 +5,7 @@ After=network.target
 [Service]
 Type=simple
 EnvironmentFile=/etc/shopvpn-ssh-agent.env
-ExecStart=/usr/bin/python3 /opt/shopvpn/ssh_node_agent.py --host 127.0.0.1 --port 8765 --db /var/lib/shopvpn-ssh-agent/agent.db
+ExecStart=/usr/bin/python3 /opt/shopvpn/ssh_node_agent.py
 Restart=on-failure
 RestartSec=3
 User=root
