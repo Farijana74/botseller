@@ -171,7 +171,11 @@ async def _install(db, job, name, host, ssh_port, username, password, private_ke
 
         _log(job, "نصب و راه‌اندازی سرویس Agent...")
         await run("cd /tmp/shopvpn-install && bash deploy/install-shopvpn-ssh-agent.sh", timeout=900)
-        await run("systemctl restart shopvpn-ssh-agent && sleep 2 && systemctl is-active shopvpn-ssh-agent")
+        await run("systemctl restart shopvpn-ssh-agent; sleep 4", check=False)
+        state = await run("systemctl is-active shopvpn-ssh-agent", check=False)
+        if state != "active":
+            tail = await run("journalctl -u shopvpn-ssh-agent -n 12 --no-pager -o cat", check=False)
+            raise InstallError(f"سرویس Agent بالا نیامد ({state}). خروجی سرور:\n{tail[-600:]}")
 
         _log(job, "تنظیم فایروال...")
         rules = []

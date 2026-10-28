@@ -31,7 +31,8 @@ from aiohttp import web
 USERNAME_RE = re.compile(r"^[a-z_][a-z0-9_-]{2,31}$")
 ACCOUNT_ID_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
 logger = logging.getLogger(__name__)
-ENFORCEMENT_TASK_KEY = web.AppKey("enforcement_task", asyncio.Task)
+# web.AppKey فقط از aiohttp 3.9 به بعد وجود دارد؛ Ubuntu 22.04 نسخه 3.8 دارد.
+ENFORCEMENT_TASK_KEY = web.AppKey("enforcement_task", asyncio.Task) if hasattr(web, "AppKey") else "enforcement_task"
 
 
 def utc_now() -> str:
