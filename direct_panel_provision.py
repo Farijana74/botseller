@@ -210,6 +210,8 @@ async def _provision_combined(db, product, quantity: int = 1, user_id: int = Non
             if not cc_id:
                 raise ProvisionError("ثبت سرویس VPN برای اتصال به سهمیه مشترک ناموفق بود.")
             db.attach_custom_config_to_quota_pool(pool_id, cc_id)
+        for vpn_item, ssh_item in zip(vpn_items, ssh_items):
+            db.link_ssh_account_to_config(ssh_item["account_id"], vpn_item["custom_config_id"])
     except Exception as exc:
         provider = get_provider(db.get_panel_server(product["provision_server_id"]))
         for item in vpn_items:
@@ -229,6 +231,9 @@ async def _provision_combined(db, product, quantity: int = 1, user_id: int = Non
 
     for item in vpn_items:
         item["quota_pool_id"] = int(pool_id)
+    import dedicated_sub
+    if dedicated_sub.is_enabled(db):
+        return vpn_items
     return vpn_items + ssh_items
 
 
@@ -318,7 +323,7 @@ async def provision_ssh_direct(db, product, quantity: int = 1, user_id: int = No
         password = str(item.metadata.get("password") or "")
         host = str(item.host or "")
         uri_host = f"[{host}]" if ":" in host and not host.startswith("[") else host
-        uri = f"ssh://{urllib.parse.quote(item.username, safe='')}:{urllib.parse.quote(password, safe='')}@{uri_host}:{int(item.port)}"
+        uri = f"ssh://{urllib.parse.quote(item.username, safe='')}:{urllib.parse.quote(password, safe='')}@{uri_host}:{int(item.port)}#{urllib.parse.quote(str(node.get('name') or 'SSH'), safe='')}"
         output.append({"username": item.username, "host": host, "port": int(item.port),
             "password": password, "account_id": item.account_id, "quota_pool_id": int(pool_id),
             "subscription_url": uri, "volume_gb": volume_gb, "duration_days": duration_days,
