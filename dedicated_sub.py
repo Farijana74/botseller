@@ -342,7 +342,7 @@ def resolve_faq(settings: Dict[str, str]) -> List[tuple]:
 # تحلیل پاسخ پنل
 # ---------------------------------------------------------------------------
 CONFIG_SCHEMES = ("vless://", "vmess://", "trojan://", "ss://", "ssr://", "hysteria://", "hysteria2://", "hy2://", "tuic://", "ssh://")
-_CONFIG_URI_RE = re.compile(r"(?:vmess|vless|trojan|hysteria2|hy2|hysteria|tuic|ssr|ss|ssh)://[^\s\"'<>]+", re.IGNORECASE)
+_CONFIG_URI_RE = re.compile(r"(?:vmess|vless|trojan|hysteria2|hy2|hysteria|tuic|ssr|ss)://[^\s\"'<>]+")
 
 
 def parse_userinfo(value: Optional[str]) -> dict:
@@ -465,13 +465,14 @@ def ssh_uris_for_config(db, config_id) -> List[str]:
         except Exception:
             continue
         host = str(row.get("host") or "")
-        uri_host = f"[{host}]" if ":" in host and not host.startswith("[") else host
-        user = urllib.parse.quote(str(row.get("username") or ""), safe="")
         remark = str(row.get("node_name") or "").strip() or "SSH " + str(row.get("username") or "")
         if len(rows) > 1:
             remark += f" {n}"
-        out.append(f"ssh://{user}:{urllib.parse.quote(password, safe='')}@{uri_host}:{int(row.get('port') or 22)}"
-                   f"#{urllib.parse.quote(remark, safe='')}")
+        try:
+            from ssh_uri import build_ssh_uri
+            out.append(build_ssh_uri(row.get("username"), password, host, int(row.get("port") or 22), remark))
+        except (TypeError, ValueError):
+            continue
     return out
 
 

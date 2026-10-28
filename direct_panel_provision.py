@@ -18,6 +18,7 @@ from datetime import datetime, timedelta, timezone
 
 from panel_providers import get_provider, PanelError, PanelUsernameTakenError
 from user_limit import order_user_limit, provider_kwargs
+from ssh_uri import build_ssh_uri
 #‍​‌‌​​​‌‌​‌‌​​‌​‌​‌‌​‌‌​​​‌‌​​‌​‌​‌‌​‌‌‌​​‌‌​‌‌‌‌​‌‌‌​​‌​‍
 
 logger = logging.getLogger(__name__)
@@ -341,8 +342,7 @@ async def provision_ssh_direct(db, product, quantity: int = 1, user_id: int = No
     for item in built:
         password = str(item.metadata.get("password") or "")
         host = str(item.host or "")
-        uri_host = f"[{host}]" if ":" in host and not host.startswith("[") else host
-        uri = f"ssh://{urllib.parse.quote(item.username, safe='')}:{urllib.parse.quote(password, safe='')}@{uri_host}:{int(item.port)}#{urllib.parse.quote(str(node.get('name') or 'SSH'), safe='')}"
+        uri = build_ssh_uri(item.username, password, host, int(item.port), str(node.get("name") or "SSH"))
         output.append({"username": item.username, "host": host, "port": int(item.port),
             "password": password, "account_id": item.account_id, "quota_pool_id": int(pool_id),
             "subscription_url": uri, "volume_gb": volume_gb, "duration_days": duration_days,
