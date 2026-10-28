@@ -517,6 +517,16 @@ MSG_EN[remove_dsub_warn]="⚠️ This removes the sub server and its nginx confi
 MSG_FA[remove_dsub_warn]="⚠️ این کار سرور ساب و کانفیگ nginx آن را حذف می‌کند. لینک‌های ساب که قبلاً به کاربران داده شده از کار می‌افتند (اگر فقط می‌خواهی قابلیت را غیرفعال کنی «خاموش کردن» را بزن). گواهی SSL نگه داشته می‌شود."
 MSG_EN[prompt_domain_used_dsub]="What domain did you use for the dedicated sub server? (to remove its nginx config): "
 MSG_FA[prompt_domain_used_dsub]="دامنه‌ای که برای سرور ساب اختصاصی استفاده کرده بودی چه بود؟ (برای حذف کانفیگ nginx): "
+MSG_EN[menu_dsub_status]="Dedicated sub status"
+MSG_FA[menu_dsub_status]="وضعیت ساب اختصاصی"
+MSG_EN[dsub_status_title]="Dedicated sub status"
+MSG_FA[dsub_status_title]="وضعیت ساب اختصاصی"
+MSG_EN[dsub_status_none]="No dedicated sub domain is configured."
+MSG_FA[dsub_status_none]="هیچ دامنه‌ی ساب اختصاصی تنظیم نشده است."
+MSG_EN[dsub_status_service]="Service active"
+MSG_FA[dsub_status_service]="سرویس فعال"
+MSG_EN[dsub_status_state]="Feature state (ON/OFF)"
+MSG_FA[dsub_status_state]="وضعیت قابلیت (روشن/خاموش)"
 MSG_EN[dsub_removed]="✅ Dedicated sub server removed."
 MSG_FA[dsub_removed]="✅ سرور ساب اختصاصی حذف شد."
 
@@ -2874,6 +2884,32 @@ remove_dedicated_sub() {
     echo -e "${GREEN}$(t dsub_removed)${RESET}"
 }
 
+dedicated_sub_status() {
+    local env_file="$INSTALL_DIR/.env" url d svc enabled cert code state
+    url=""
+    [ -f "$env_file" ] && url=$(grep -m1 "^DEDICATED_SUB_URL=" "$env_file" | cut -d= -f2-)
+    d=$(printf '%s' "$url" | sed -E 's#^"?https?://##; s#[/"]+.*$##')
+    if [ -z "$d" ]; then
+        echo -e "${YELLOW}$(t dsub_status_none)${RESET}"
+        return
+    fi
+    svc=$(t ws_no)
+    systemctl is-active --quiet "${SERVICE_NAME}-sub" 2>/dev/null && svc=$(t ws_yes)
+    enabled=$(t ws_no)
+    [ -L "/etc/nginx/sites-enabled/${d}.conf" ] && enabled=$(t ws_yes)
+    cert=$(t ws_no)
+    [ -e "/etc/letsencrypt/live/${d}/fullchain.pem" ] && cert=$(t ws_yes)
+    code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 --resolve "${d}:443:127.0.0.1" "https://${d}/healthz" 2>/dev/null)
+    state=$(dsub_cli status | head -1)
+    echo -e "${CYAN}${BOLD}$(t dsub_status_title)${RESET}"
+    echo "  ${d}"
+    echo "    $(t dsub_status_service): ${svc}"
+    echo "    $(t dsub_status_state): ${state:-?}"
+    echo "    $(t ws_status_enabled): ${enabled}"
+    echo "    $(t ws_status_cert): ${cert}"
+    echo "    $(t ws_status_store): ${code:-?}"
+}
+
 # ---------------------------------------------------------------------------
 # Action: install/manage the project-owned local translation runtime.
 # Everything is automated: Argos models + isolated LibreTranslate fallback.
@@ -3523,6 +3559,7 @@ while true; do
     menu_item 30 menu_38
     menu_item 31 menu_39
     menu_item 32 menu_40 "$RED"
+    menu_item D menu_dsub_status "$CYAN"
     menu_section sec_translation
     menu_item 33 menu_27
     menu_item 34 menu_28 "$RED"
@@ -3583,6 +3620,7 @@ while true; do
         39) change_admin_panel_credentials; pause ;;
         40) telegram_accounts_menu ;;
         [Ss]) web_store_status; pause ;;
+        [Dd]) dedicated_sub_status; pause ;;
         [Ll]) toggle_lang ;;
         0) echo -e "${CYAN}$(t goodbye)${RESET}"; exit 0 ;;
         *) echo -e "${RED}$(t invalid_choice)${RESET}"; sleep 1 ;;
