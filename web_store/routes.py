@@ -2,6 +2,8 @@
 """مسیرهای API مخصوص سایت فروش وب: ورود، کاتالوگ، سرویس‌ها، QR و ادغام حساب."""
 from fastapi import APIRouter
 
+import dedicated_sub as ds
+
 from miniapp.server import (
     BaseModel,
     Database,
@@ -74,6 +76,13 @@ async def api_web_catalog(tenant: Tenant = Depends(get_tenant)):
         "bot_url": f"https://t.me/{username}" if username else "",
         "categories": categories,
     }
+
+
+@router.get("/api/web/apps")
+def api_web_apps(tenant: Tenant = Depends(get_tenant)):
+    """برنامه‌های اتصال (همان فهرست صفحه‌ی ساب اختصاصی، با تنظیمات ادمین)."""
+    _web_main_only(tenant)
+    return {"platforms": ds.PLATFORM_LABELS, "apps": ds.resolve_apps(ds.all_settings(tenant.db))}
 
 
 @router.post("/api/web/login/start")
