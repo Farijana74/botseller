@@ -36,6 +36,17 @@ def planned_usernames(base: str, quantity: int) -> list:
     return [base] if quantity == 1 else [f"{base}_{i}" for i in range(1, quantity + 1)]
 
 
+def _order_config_name(order) -> str:
+    """Read config_name from either sqlite3.Row or a mapping without assuming .get()."""
+    if order is None:
+        return ""
+    try:
+        value = order["config_name"]
+    except (KeyError, IndexError, TypeError):
+        value = ""
+    return str(value or "")
+
+
 async def provision_direct(db, product, quantity: int = 1, user_id: int = None, order_id: int = None) -> list:
     """محصول باید provision_server_id معتبر داشته باشد. برای هر واحد یک کاربر واقعی
     روی همان پنل ساخته می‌شود. برمی‌گرداند: لیستی از
@@ -273,7 +284,7 @@ async def provision_ssh_direct(db, product, quantity: int = 1, user_id: int = No
     order = db.get_order(order_id) if order_id is not None else None
     # Keep the SSH login recognizable and tied to the name shown for the order.
     # SSH usernames are restricted to portable ASCII account-name characters.
-    requested_base = str((order or {}).get("config_name") or "").strip().lower()
+    requested_base = _order_config_name(order).strip().lower()
     requested_base = "".join(ch for ch in requested_base if ch in string.ascii_lowercase + string.digits + "_-").strip("_-")
     requested_base = requested_base[:12]
     try:
