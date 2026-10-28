@@ -413,7 +413,7 @@ def extract_uris(raw: bytes) -> List[str]:
         return []
 
 
-def quota_info_for_config(db, config_id: int) -> Optional[dict]:
+def quota_info_for_config(db, config_id: int, any_status: bool = False) -> Optional[dict]:
     """Return subscription-userinfo compatible values from the shared VPN+SSH pool.
 
     A panel may report unlimited quota for the VPN half while the product is sold
@@ -422,7 +422,7 @@ def quota_info_for_config(db, config_id: int) -> Optional[dict]:
     """
     try:
         pool = db.quota_pool_for_custom_config(int(config_id))
-        if not pool or str(pool.get("status") or "active") != "active":
+        if not pool or (not any_status and str(pool.get("status") or "active") != "active"):
             return None
         usage = db.get_quota_usage(int(pool["id"]))
         if not usage:

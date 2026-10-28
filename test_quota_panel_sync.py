@@ -184,6 +184,21 @@ class PanelSyncTests(unittest.TestCase):
         self.assertEqual(ssh.updated[0][1], db.get_quota_pool(pool_id)["expires_at"])
 
 
+class UserFacingUsageTests(unittest.TestCase):
+    def test_user_sees_pool_usage_and_original_total_not_panel_remaining(self):
+        """بات/مینی‌اپ/فروشگاه: مصرف = VPN+SSH و سقف = حجم اصلی بسته (نه سقف کم‌شده‌ی پنل)."""
+        import sub_info
+        db, rec, vpn, ssh, pool_id, _ = make_world(limit_gb=10, vpn=FakeVPN(used=2 * GB), ssh=FakeSSH(used=1 * GB))
+        run(rec.reconcile_pool(db.get_quota_pool(pool_id)))
+        self.assertEqual(vpn.limit, 9 * GB)  # پنل: سقف = ۲ + ۷ (فقط برای قطع لحظه‌ای)
+        config.DB_PATH = db.db_path
+        sub_info._pool_db = None
+        info = sub_info._pool_override_sync("https://sub.example.com/x")
+        self.assertEqual(info["upload"] + info["download"], 3 * GB)
+        self.assertEqual(info["total"], 10 * GB)
+        self.assertIsNone(sub_info._pool_override_sync("https://other.example.com/none"))
+
+
 class RenewalTests(unittest.TestCase):
     def test_renew_adds_to_pool_limit_and_extends_expiry(self):
         db, rec, vpn, ssh, pool_id, _ = make_world(limit_gb=10, expires_in_days=5, ssh=FakeSSH(used=4 * GB))
