@@ -13,6 +13,8 @@
 import logging
 import random
 import string
+import urllib.parse
+from datetime import datetime, timedelta, timezone
 
 from panel_providers import get_provider, PanelError, PanelUsernameTakenError
 from user_limit import order_user_limit, provider_kwargs
@@ -44,6 +46,14 @@ async def provision_direct(db, product, quantity: int = 1, user_id: int = None, 
 
     اگر user_id داده شود، هر واحد ساخته‌شده در custom_configs (source='direct_product')
     هم ثبت می‌شود تا هشدار اتمام حجم/زمان و «سرویس‌های من» آن را ببینند."""
+    ssh_node_id = None
+    try:
+        ssh_node_id = product["provision_ssh_node_id"]
+    except (KeyError, IndexError):
+        pass
+    if ssh_node_id:
+        return await provision_ssh_direct(db, product, quantity=quantity, user_id=user_id, order_id=order_id)
+
     if not isinstance(quantity, int) or quantity < 1:
         raise ProvisionError("تعداد درخواستی نامعتبر است.")
 
@@ -152,3 +162,97 @@ async def provision_direct(db, product, quantity: int = 1, user_id: int = None, 
     return built
 #‍​‌‌​​​‌‌​‌‌​​‌​‌​‌‌​‌‌​​​‌‌​​‌​‌​‌‌​‌‌‌​​‌‌​‌‌‌‌​‌‌‌​​‌​‍
 # 		   		 		  	 	 		 		   		  	 	 		 			  		 				 			  	 
+
+
+async def provision_ssh_direct(db, product, quantity: int = 1, user_id: int = None, order_id: int = None) -> list:
+    """Provision a paid SSH product on a Linux Agent and create one shared quota pool.
+
+    Commercial delivery fails closed unless the Agent reports a valid per-account
+    counter. This prevents selling a quota-limited SSH product that cannot enforce
+    its advertised volume.
+    """
+    if not isinstance(quantity, int) or quantity < 1 or user_id is None:
+        raise ProvisionError("تعداد یا شناسه کاربر برای ساخت محصول SSH نامعتبر است.")
+    node_id = product["provision_ssh_node_id"]
+    node = next((n for n in db.list_ssh_nodes(active_only=True) if int(n["id"]) == int(node_id)), None)
+    if not node or node.get("node_type") != "linux":
+        raise ProvisionError("نود Linux Agent فعال پیدا نشد؛ پنل SSH هنوز آداپتور عملیاتی ندارد.")
+    volume_gb = float(product["auto_provision_volume_gb"] or 0)
+    duration_days = int(product["duration_days"] if product["duration_days"] is not None else 30)
+    if volume_gb < 0 or duration_days < 0:
+        raise ProvisionError("حجم یا مدت محصول SSH نامعتبر است.")
+    expires_at = (datetime.now(timezone.utc) + timedelta(days=duration_days)).isoformat() if duration_days else None
+
+    from ssh_providers import get_ssh_provider, SSHProviderError
+    from quota_reconciler import _env_secret_resolver
+    from ssh_credentials import encrypt_credential
+    try:
+        encrypt_credential("preflight-check")
+    except RuntimeError as exc:
+        raise ProvisionError(str(exc))
+    try:
+        provider = get_ssh_provider(node, secret_resolver=_env_secret_resolver)
+        pool_id = db.create_quota_pool(int(user_id), volume_gb, expires_at,
+            label=f"{product['name']} SSH" + (f" · order #{order_id}" if order_id else ""))
+    except Exception as exc:
+        raise ProvisionError(f"آماده‌سازی محصول SSH ناموفق بود: {exc}") from exc
+    built = []
+    try:
+        for _ in range(quantity):
+            result = None
+            for attempt in range(5):
+                username = "sv" + "".join(random.choices(string.ascii_lowercase + string.digits, k=10))
+                try:
+                    # The shared pool is the sole volume authority. A duplicate
+                    # per-account cap would prevent a renewed/increased pool from
+                    # restoring accounts and would break shared usage semantics.
+                    result = await provider.create_account(username, 0, expires_at)
+                    break
+                except SSHProviderError as exc:
+                    if "already exists" in str(exc).lower() and attempt < 4:
+                        continue
+                    raise
+            if result is None:
+                raise ProvisionError("ساخت نام کاربری SSH یکتا ناموفق بود.")
+            try:
+                usage = await provider.get_usage(result.account_id)
+                reliable_sources = {"nftables_port_counters", "external-counter", "ssh-traffic-accountant"}
+                if volume_gb > 0 and (not usage.get("accounting_ready") or usage.get("source") not in reliable_sources):
+                    raise ProvisionError("فروش محصول حجمی SSH متوقف شد: شمارنده‌ی دوطرفه‌ی معتبر آماده نیست. nftables را فعال کنید و مطمئن شوید منبع برابر nftables_port_counters یا یک external-counter معتبر است.")
+                result.metadata["accounting_ready"] = bool(usage.get("accounting_ready"))
+                credential_enc = encrypt_credential(result.metadata.get("password", ""))
+                db.register_ssh_account(int(node_id), int(user_id), result.account_id, result.username,
+                    result.host, result.port, int(pool_id), expires_at, credential_enc)
+                if usage.get("accounting_ready"):
+                    db.record_usage_snapshot("ssh", result.account_id, int(usage["used_bytes"]),
+                        uploaded_bytes=usage.get("uploaded_bytes", 0), downloaded_bytes=usage.get("downloaded_bytes", 0),
+                        source=str(usage.get("source") or "ssh-agent"), reported_at=usage.get("reported_at"))
+                built.append(result)
+            except Exception:
+                try:
+                    await provider.delete_account(result.account_id)
+                except Exception:
+                    logger.exception("SSH provisioning rollback failed for %s", result.account_id)
+                raise
+    except Exception as exc:
+        for item in built:
+            try:
+                await provider.delete_account(item.account_id)
+            except Exception:
+                logger.exception("SSH provisioning rollback failed for %s", item.account_id)
+        db.delete_quota_pool(pool_id)
+        if isinstance(exc, ProvisionError):
+            raise
+        raise ProvisionError(f"ساخت محصول SSH ناموفق بود: {exc}") from exc
+
+    output = []
+    for item in built:
+        password = str(item.metadata.get("password") or "")
+        host = str(item.host or "")
+        uri_host = f"[{host}]" if ":" in host and not host.startswith("[") else host
+        uri = f"ssh://{urllib.parse.quote(item.username, safe='')}:{urllib.parse.quote(password, safe='')}@{uri_host}:{int(item.port)}"
+        output.append({"username": item.username, "host": host, "port": int(item.port),
+            "password": password, "account_id": item.account_id, "quota_pool_id": int(pool_id),
+            "subscription_url": uri, "volume_gb": volume_gb, "duration_days": duration_days,
+            "accounting_ready": bool(item.metadata.get("accounting_ready"))})
+    return output
