@@ -1875,6 +1875,7 @@ class DatabaseBase:
             ("channel_posts", "poll_json", "TEXT"),
             ("tickets", "department_id", "INTEGER"),
             ("orders", "quantity", "INTEGER DEFAULT 1"),
+            ("orders", "delivery_mode", "TEXT"),
             ("orders", "config_name", "TEXT"),
             ("configs", "order_id", "INTEGER"),
             ("reseller_bots", "link_slug", "TEXT"),
@@ -2090,6 +2091,35 @@ class DatabaseBase:
         for table, col, coltype in migrations:
             if not self._column_exists(conn, table, col):
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {coltype}")
+
+        # SHOPVPN-HAPP-CATALOG-OVERLAY: schema-snapshot
+        # Keep the delivery choice with each purchase so a later product/category
+        # setting change cannot turn an already-sold Happ service into a plain sub.
+        if self._column_exists(conn, "orders", "delivery_mode"):
+            row = conn.execute("SELECT value FROM settings WHERE key='telegram_sales_delivery_modes'").fetchone()
+            try:
+                modes = json.loads(row[0] or "{}") if row else {}
+            except (TypeError, ValueError):
+                modes = {}
+            if not isinstance(modes, dict):
+                modes = {}
+            pending = conn.execute(
+                "SELECT o.id,o.product_id,p.category_id,ps.panel_type FROM orders o "
+                "LEFT JOIN products p ON p.id=o.product_id "
+                "LEFT JOIN panel_servers ps ON ps.id=p.provision_server_id "
+                "WHERE o.delivery_mode IS NULL AND o.product_id>0"
+            ).fetchall()
+            for order in pending:
+                mode = modes.get(str(order["product_id"]), "inherit")
+                if mode == "inherit" and order["category_id"] is not None:
+                    mode = modes.get(f"cat:{order['category_id']}", "inherit")
+                if mode not in ("normal", "happ", "both"):
+                    mode = "normal"
+                if mode == "both":
+                    mode = "happ"
+                if mode in ("happ", "both") and order["panel_type"] != "3xui":
+                    mode = "normal"
+                conn.execute("UPDATE orders SET delivery_mode=? WHERE id=?", (mode, order["id"]))
 
         # ایندکس ستون ref_number باید بعد از migrations بالا اضافه شود چون
         # روی نصب‌های قدیمی این ستون همین بالا با ALTER TABLE اضافه می‌شود.

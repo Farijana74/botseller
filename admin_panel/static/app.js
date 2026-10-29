@@ -381,6 +381,7 @@ const NAV = [
 
   // محصولات و بازاریابی
   { key: 'catalog', label: 'محصولات و بانک کانفیگ', icon: 'catalog', role: 'catalog', section: 'محصولات و بازاریابی' },
+  { key: 'telegram-sales', label: 'ربات فروش تلگرام', icon: 'orders', role: 'settings', section: 'محصولات و بازاریابی' },
   { key: 'discounts', label: 'کدهای تخفیف', icon: 'discounts', role: 'discounts', section: 'محصولات و بازاریابی' },
   { key: 'broadcast', label: 'پیام همگانی', icon: 'broadcast', role: 'broadcast', section: 'محصولات و بازاریابی' },
   { key: 'banners', label: 'بنرها', icon: 'catalog', role: 'settings', section: 'محصولات و بازاریابی' },
@@ -932,6 +933,7 @@ async function renderPage(tab) {
       case 'topups': return await renderTopups();
       case 'users': return await renderUsers();
       case 'catalog': return await renderCatalog();
+      case 'telegram-sales': return await renderTelegramSales();
       case 'discounts': return await renderDiscounts();
       case 'tickets': return await renderTickets();
       case 'support': return await renderSupport();
@@ -3788,6 +3790,72 @@ async function renderCatalog() {
   }
   $$('[data-prod-up]', body).forEach(b => b.addEventListener('click', () => moveProduct(Number(b.dataset.prodUp), Number(b.dataset.cat), -1)));
   $$('[data-prod-down]', body).forEach(b => b.addEventListener('click', () => moveProduct(Number(b.dataset.prodDown), Number(b.dataset.cat), 1)));
+}
+
+async function renderTelegramSales() {
+  // SHOPVPN-HAPP-CATALOG-OVERLAY: scoped-sales-ui
+  const d = await apiGet('/telegram-sales/overview');
+  const modeSelect = (id, value, inheritLabel) => `<select class="input" data-sales-mode="${esc(String(id))}" style="min-width:150px">
+    <option value="inherit" ${value === 'inherit' ? 'selected' : ''}>${inheritLabel}</option>
+    <option value="normal" ${value === 'normal' ? 'selected' : ''}>ساب معمولی</option>
+    <option value="happ" ${value === 'happ' ? 'selected' : ''}>فقط Happ</option></select>`;
+  setContent(`
+    <div class="grid grid-4" style="margin-bottom:16px">
+      <div class="card"><div class="card-sub">کاربران ثبت‌شده</div><div class="stat-value">${Number(d.users || 0).toLocaleString('fa-IR')}</div></div>
+      <div class="card"><div class="card-sub">خریداران</div><div class="stat-value">${Number(d.buyers || 0).toLocaleString('fa-IR')}</div></div>
+      <div class="card"><div class="card-sub">فروش‌های تاییدشده</div><div class="stat-value">${Number(d.sales || 0).toLocaleString('fa-IR')}</div></div>
+      <div class="card"><div class="card-sub">تمدیدهای تاییدشده</div><div class="stat-value">${Number(d.renewals || 0).toLocaleString('fa-IR')}</div></div>
+    </div>
+    <div class="grid grid-2">
+      <div class="card"><h3>وضعیت اتصال</h3>
+        <p>تلگرام: <b>${d.telegram_configured ? 'تنظیم شده' : 'تنظیم نشده'}</b> ${d.telegram_token_masked ? `<code dir="ltr">${esc(d.telegram_token_masked)}</code>` : ''}</p>
+        <p>پنل Sanaei: <b>${Number(d.panel_count || 0) ? `${Number(d.panel_count)} پنل ثبت‌شده` : 'پنلی ثبت نشده'}</b></p>
+        <p>سرویس ربات: <span class="card-sub">${esc(d.service_status || '')}</span></p>
+        <div class="toolbar"><button class="btn btn-sm" id="sales-test-telegram">تست اتصال تلگرام</button>
+          <button class="btn btn-sm" id="sales-test-panels">تست اتصال پنل‌های VPN</button>
+          <button class="btn btn-sm" id="sales-open-panels">مدیریت پنل‌ها</button><button class="btn btn-sm" id="sales-open-logs">گزارش‌ها و لاگ‌ها</button></div>
+      </div>
+      <div class="card"><h3>روش تحویل سرویس</h3><p class="card-sub">پیش‌فرض همهٔ محصولات ساب معمولی است. Happ فقط برای محصولات انتخاب‌شده فعال می‌شود و در حالت Happ، لینک و QR معمولی ارسال نمی‌شود. تولید Happ نیازمند پنل 3X-UI سازگار است.</p>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px"><h3>روش تحویل هر دسته‌بندی</h3><p class="card-sub">محصول‌ها با «پیروی از دسته‌بندی» تنظیم اینجا را می‌گیرند.</p>
+      <div class="table-wrap"><table><thead><tr><th>دسته‌بندی</th><th>وضعیت</th><th>روش تحویل</th></tr></thead><tbody>
+        ${(d.categories || []).map(c => `<tr><td>${esc(c.name)}</td><td>${c.is_active ? 'فعال' : 'غیرفعال'}</td><td>${modeSelect(`cat:${c.id}`, c.delivery_mode || 'inherit', 'پیش‌فرض معمولی')}</td></tr>`).join('') || '<tr><td colspan="3" class="empty-state">دسته‌بندی ثبت نشده است.</td></tr>'}
+      </tbody></table></div>
+    </div>
+    <div class="card" style="margin-top:16px"><h3>روش تحویل هر محصول</h3>
+      <div class="table-wrap"><table><thead><tr><th>محصول</th><th>دسته‌بندی</th><th>پشتیبانی Happ</th><th>روش تحویل</th></tr></thead><tbody>
+        ${(d.products || []).map(p => `<tr><td>${esc(p.name)}${p.is_active ? '' : ' · غیرفعال'}</td><td>${esc(p.category_name || '')}</td><td>${p.happ_supported ? '3X-UI' : 'ندارد'}</td><td>${modeSelect(p.id, p.delivery_mode || 'inherit', 'پیروی از دسته‌بندی')}</td></tr>`).join('') || '<tr><td colspan="4" class="empty-state">محصولی ثبت نشده است.</td></tr>'}
+      </tbody></table></div><div class="toolbar"><button class="btn btn-primary" id="sales-save">ذخیره تنظیمات تحویل</button></div>
+    </div>
+    <div class="card" style="margin-top:16px"><h3>سفارش‌های اخیر</h3><div class="table-wrap"><table><thead><tr><th>شناسه سفارش</th><th>پلن</th><th>وضعیت</th><th>تاریخ</th></tr></thead><tbody>
+      ${(d.recent_orders || []).map(o => `<tr><td>#${Number(o.id)}</td><td>${esc(o.product)}</td><td>${esc(o.status)}</td><td>${esc(o.created_at || '')}</td></tr>`).join('') || '<tr><td colspan="4" class="empty-state">سفارشی ثبت نشده است.</td></tr>'}
+    </tbody></table></div></div>
+  `);
+  $('#sales-test-telegram')?.addEventListener('click', async e => {
+    const btn = e.currentTarget; btn.disabled = true;
+    try { const r = await apiPost('/telegram-sales/test-telegram', {}); toast(r.ok ? `اتصال تلگرام موفق بود${r.username ? ` (@${r.username})` : ''}.` : 'اتصال تلگرام ناموفق بود.', !r.ok); }
+    catch (err) { handleErr(err); } finally { btn.disabled = false; }
+  });
+  $('#sales-test-panels')?.addEventListener('click', async e => {
+    const btn = e.currentTarget; btn.disabled = true; btn.textContent = 'در حال بررسی...';
+    try {
+      const r = await apiPost('/telegram-sales/test-panels', {});
+      const summary = (r.results || []).map(x => `${x.name}: ${x.ok ? 'متصل' : 'خطا'}`).join('، ');
+      toast(summary || 'پنل فعالی برای بررسی وجود ندارد.', !r.ok);
+    } catch (err) { handleErr(err); } finally { btn.disabled = false; btn.textContent = 'تست اتصال پنل‌های VPN'; }
+  });
+  $('#sales-open-panels')?.addEventListener('click', () => goTo('panels'));
+  $('#sales-open-logs')?.addEventListener('click', () => goTo('logs'));
+  $('#sales-save')?.addEventListener('click', async e => {
+    const btn = e.currentTarget; btn.disabled = true;
+    try {
+      const selected = Object.fromEntries($$('[data-sales-mode]', content()).map(x => [x.dataset.salesMode, x.value]));
+      const product_delivery = selected;
+      await apiPost('/telegram-sales/settings', { default_delivery: 'normal', product_delivery });
+      toast('تنظیمات روش تحویل ذخیره شد.'); await renderTelegramSales();
+    } catch (err) { handleErr(err); btn.disabled = false; }
+  });
 }
 
 /* ---------------------------------------------------------- catalog: bento */

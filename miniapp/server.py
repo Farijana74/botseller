@@ -2675,6 +2675,7 @@ async def api_abangateway_webhook(request: Request, tenant: Tenant = Depends(get
         asyncio.create_task(deliver_config_to_user_web(
             order["user_id"], product["name"], [r["subscription_url"] for r in prov_results],
             final_price=order["final_price"], order_id=order_id, db=db, bot_token=tenant.bot_token,
+            happ_links=[r.get("happ_link") for r in prov_results],
         ))
         return {"status": "ok"}
 
@@ -2953,6 +2954,7 @@ async def api_blupal_webhook(request: Request, tenant: Tenant = Depends(get_tena
         asyncio.create_task(deliver_config_to_user_web(
             order["user_id"], product["name"], [r["subscription_url"] for r in prov_results],
             final_price=order["final_price"], order_id=order_id, db=db, bot_token=tenant.bot_token,
+            happ_links=[r.get("happ_link") for r in prov_results],
         ))
         return {"status": "ok"}
 
@@ -3840,6 +3842,7 @@ async def _complete_generic_gateway_payment(db: Database, tenant: "Tenant", invo
         asyncio.create_task(deliver_config_to_user_web(
             order["user_id"], product["name"], [r["subscription_url"] for r in prov_results],
             final_price=order["final_price"], order_id=order_id, db=db, bot_token=tenant.bot_token,
+            happ_links=[r.get("happ_link") for r in prov_results],
         ))
         return
 
@@ -4354,6 +4357,7 @@ async def api_plisio_webhook(request: Request, tenant: Tenant = Depends(get_tena
                 asyncio.create_task(deliver_config_to_user_web(
                     order["user_id"], product["name"], [r["subscription_url"] for r in prov_results],
                     final_price=order["final_price"], order_id=order_id, db=db, bot_token=tenant.bot_token,
+                    happ_links=[r.get("happ_link") for r in prov_results],
                 ))
                 return {"status": "ok"}
 

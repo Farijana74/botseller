@@ -28,6 +28,7 @@ FIELDS = {
     "dsub_footer_text": ("📝 متن پایین صفحه", "یک خط توضیح یا قانون کوتاه پایین صفحه.", 200, "text"),
     "dsub_profile_title": ("🏷 عنوان پروفایل داخل اپ", "نامی که اپ برای این اشتراک نشان می‌دهد. متغیرها: {name} نام سرویس، {user} نام کاربری، {brand} برند.", 80, "text"),
     "dsub_update_interval": ("🔄 بازه‌ی به‌روزرسانی اپ", "هر چند ساعت اپ ساب را دوباره بگیرد (۰ = تصمیم با پنل).", 3, "int:0:168"),
+    "dsub_happ_routing": ("🧭 قوانین مسیریابی Happ", "لینک Happ routing را وارد کن. این هدر فقط وقتی درخواست از Happ باشد فرستاده می‌شود.", 7000, "happ-routing"),
     "dsub_info_line_text": ("📊 متن خط اول ساب", "متغیرها: {volume} باقی‌مانده، {used} مصرف، {total} کل، {days} روز باقی‌مانده.", 100, "text"),
     "dsub_expired_text": ("⛔ متن کانفیگ نمایشی منقضی", "وقتی سرویس منقضی یا غیرفعال است، به‌جای کانفیگ این پیام داخل اپ نشان داده می‌شود.", 100, "text"),
     "dsub_limited_text": ("📶 متن کانفیگ نمایشی حجم تمام‌شده", "وقتی حجم سرویس تمام شده است.", 100, "text"),
@@ -44,6 +45,7 @@ TOGGLES = {
     "dsub_show_apps": "📱 بخش برنامه‌ها",
     "dsub_show_faq": "❓ بخش «اگر وصل نشد»",
     "dsub_info_line": "📊 خط اول ساب (حجم و روز)",
+    "dsub_happ_routing_enabled": "🧭 مسیریابی خودکار Happ",
     "dsub_expired_placeholder": "⛔ کانفیگ نمایشی برای منقضی/تمام‌شده",
     "dsub_usage_sampling": "🕒 نمونه‌برداری مصرف (برای نمودار)",
     "dsub_log_enabled": "🧾 لاگ دسترسی",
@@ -221,6 +223,8 @@ def register(router: Router, db, senior_admin_only, deny_mid, replace_admin_view
             f"  منقضی: {_e(_short(s['dsub_expired_text']))}",
             f"  حجم تمام‌شده: {_e(_short(s['dsub_limited_text']))}",
             f"کش پاسخ پنل: {_e(s['dsub_cache_ttl'])} ثانیه",
+            f"مسیریابی خودکار Happ: {_on(s['dsub_happ_routing_enabled'] == '1')}",
+            f"قانون Happ: {_e(_short(s['dsub_happ_routing'], 90)) or '—'}",
             f"آدرس سرور: {_e(s['dsub_base_url']) or '— (از manage.sh)'}",
             "",
             "«خط اول ساب» و «کانفیگ نمایشی» فقط روی ساب‌هایی کار می‌کنند که فرمت لینک (vless/vmess/...) دارند؛ "
@@ -228,8 +232,10 @@ def register(router: Router, db, senior_admin_only, deny_mid, replace_admin_view
             "User-Agent اپ انتخاب می‌کند و سرور ساب همان User-Agent را به پنل می‌فرستد.",
         ]
         rows = [await _toggle_row(k) for k in ("dsub_info_line", "dsub_expired_placeholder",
-                                                "dsub_usage_sampling", "dsub_log_enabled")]
+                                                "dsub_usage_sampling", "dsub_log_enabled",
+                                                "dsub_happ_routing_enabled")]
         rows += [[_edit_btn("dsub_profile_title"), _edit_btn("dsub_update_interval")],
+                 [_edit_btn("dsub_happ_routing")],
                  [_edit_btn("dsub_info_line_text")],
                  [_edit_btn("dsub_expired_text"), _edit_btn("dsub_limited_text")],
                  [_edit_btn("dsub_cache_ttl"), _edit_btn("dsub_base_url")],
@@ -511,10 +517,14 @@ def register(router: Router, db, senior_admin_only, deny_mid, replace_admin_view
             if len(items) > 10:
                 return None, "حداکثر ۱۰ مورد مجاز است."
             return "\n".join(f"{q} | {a}" for q, a in items), None
+        if kind == "happ-routing":
+            if not ds.valid_happ_routing_link(raw):
+                return None, "لینک معتبر Happ routing بفرست؛ باید happ://routing/onadd/ یا happ://routing/add/ همراه پروفایل Base64 باشد."
+            return raw, None
         return raw, None
 
     def _return_page(key):
-        if key in ("dsub_profile_title", "dsub_update_interval", "dsub_info_line_text", "dsub_expired_text",
+        if key in ("dsub_profile_title", "dsub_update_interval", "dsub_happ_routing", "dsub_info_line_text", "dsub_expired_text",
                    "dsub_limited_text", "dsub_cache_ttl", "dsub_base_url"):
             return _out_view
         if key == "dsub_faq":

@@ -84,6 +84,7 @@ from states import (
     AdminConfigManage,
     AdminCreateWalletGift,
     AdminAddCategory,
+    AdminEditCategory,
     AdminAddProduct,
     AdminEditProduct,
     AdminAddConfigs,
@@ -517,9 +518,11 @@ def create_admin_router(db, is_main_bot: bool = True, bot_manager=None) -> Route
     # -------------------------------------------------------------------
 
     @router.callback_query(F.data == "adm_categories")
-    async def cb_admin_categories(call: CallbackQuery):
+    async def cb_admin_categories(call: CallbackQuery, state: FSMContext):
         if not senior_admin_only(call.from_user.id):
             return await deny_mid(call)
+        # Opening this menu also cancels a pending add/rename operation.
+        await state.clear()
         try:
             categories = (await asyncio.to_thread(db.get_categories, active_only=False))
             await replace_admin_view(call, tr("📂 مدیریت دسته‌بندی‌ها:"), kb.admin_categories_kb(categories))
@@ -544,6 +547,63 @@ def create_admin_router(db, is_main_bot: bool = True, bot_manager=None) -> Route
             await call.answer(db.get_text('handlers_admin.auto_d5ebb39c', 'وضعیت تغییر کرد.'))
         except Exception:
             await call.answer(db.get_text('handlers_admin.auto_0040e660', '⚠️ تغییر وضعیت دسته\u200cبندی ناموفق بود. دوباره تلاش کنید.'), show_alert=True)
+
+    @router.callback_query(F.data.startswith("adm_cat_edit:"))
+    async def cb_admin_cat_edit(call: CallbackQuery, state: FSMContext):
+        if not senior_admin_only(call.from_user.id):
+            return await deny_mid(call)
+        cat_id = callback_id(call.data, "adm_cat_edit")
+        if cat_id is None:
+            return await call.answer(db.get_text('handlers_admin.auto_f25a5f7a', '⚠️ درخواست نامعتبر است.'), show_alert=True)
+        category = await asyncio.to_thread(db.get_category, cat_id)
+        if category is None:
+            return await call.answer(db.get_text('handlers_admin.auto_1da46abb', '⚠️ این دسته\u200cبندی دیگر وجود ندارد.'), show_alert=True)
+        await state.clear()
+        await state.update_data(category_id=cat_id)
+        await state.set_state(AdminEditCategory.waiting_name)
+        await safe_edit(
+            call,
+            tr(f"نام فعلی دسته‌بندی: «{category['name']}»\n\nنام جدید را ارسال کنید:"),
+            reply_markup=kb.admin_back_kb("adm_categories"),
+        )
+        await call.answer()
+
+    @router.message(AdminEditCategory.waiting_name)
+    async def process_edit_category(message: Message, state: FSMContext):
+        if not senior_admin_only(message.from_user.id):
+            await state.clear()
+            return
+        name = (message.text or "").strip()
+        if not name:
+            await message.answer(tr("لطفاً نام دسته‌بندی را وارد کنید."))
+            return
+        if len(name) > 100:
+            await message.answer(tr("نام دسته‌بندی نباید بیشتر از ۱۰۰ کاراکتر باشد."))
+            return
+        data = await state.get_data()
+        cat_id = data.get("category_id")
+        try:
+            category = await asyncio.to_thread(db.get_category, cat_id)
+            if category is None:
+                await state.clear()
+                await message.answer(tr("⚠️ این دسته‌بندی دیگر وجود ندارد."))
+                return
+            categories = await asyncio.to_thread(db.get_categories, active_only=False)
+            duplicate = any(
+                int(row["id"]) != int(cat_id)
+                and str(row["name"]).strip().casefold() == name.casefold()
+                for row in categories
+            )
+            if duplicate:
+                await message.answer(tr("⚠️ این نام برای دسته‌بندی دیگری استفاده شده است. نام دیگری وارد کنید."))
+                return
+            await asyncio.to_thread(db.edit_category, cat_id, name)
+            await asyncio.to_thread(db.log_admin_action, message.from_user.id, "category_rename", f"دسته‌بندی #{cat_id}: «{category['name']}» → «{name}»")
+            await state.clear()
+            categories = await asyncio.to_thread(db.get_categories, active_only=False)
+            await message.answer(tr("✅ نام دسته‌بندی به‌روزرسانی شد."), reply_markup=kb.admin_categories_kb(categories))
+        except Exception:
+            await message.answer(tr("⚠️ تغییر نام دسته‌بندی ناموفق بود. دوباره تلاش کنید."))
 
     @router.callback_query(F.data.startswith("adm_cat_del:"))
     async def cb_admin_cat_del(call: CallbackQuery):
@@ -3419,11 +3479,22 @@ def create_admin_router(db, is_main_bot: bool = True, bot_manager=None) -> Route
                 f"سفارش کانفیگ شخصی #{order_id} | کاربر {order['user_id']} | یوزرنیم «{result.username}» | "
                 f"{order['custom_volume_gb']} گیگ | مبلغ: {order['final_price']:,}",
             ))
+            happ_link = None
+            generate_happ = getattr(provider, "generate_happ_link", None)
+            if callable(generate_happ):
+                try:
+                    happ_link = await generate_happ(result.username)
+                except Exception as exc:
+                    logging.getLogger(__name__).warning(
+                        "Happ link generation failed (provider=%s): %s",
+                        type(provider).__name__, str(exc),
+                    )
             try:
                 await send_telegram(bot, db, order["user_id"], "✅ کانفیگ شخصی شما ساخته شد!")
                 await deliver_config_to_user(
                     bot, order["user_id"], "کانفیگ شخصی",
                     [result.subscription_url], final_price=order["final_price"], order_id=order_id, db=db,
+                    happ_links=[happ_link],
                 )
                 await _notify_user_inline_menu(bot, order["user_id"])
             except Exception:
@@ -3463,6 +3534,7 @@ def create_admin_router(db, is_main_bot: bool = True, bot_manager=None) -> Route
                 await deliver_config_to_user(
                     bot, order["user_id"], product["name"],
                     [r["subscription_url"] for r in prov_results], final_price=order["final_price"], order_id=order_id, db=db,
+                    happ_links=[r.get("happ_link") for r in prov_results],
                 )
                 await _notify_user_inline_menu(bot, order["user_id"])
             except Exception:

@@ -102,9 +102,21 @@ async def finalize_paid_order(db, bot, order_id: int, notify_admins_fn=None) -> 
         )
         leak_index.schedule_refresh(db, new_cc_id)
         db.approve_custom_config_order(order_id)
+        happ_link = None
+        generate_happ = getattr(provider, "generate_happ_link", None)
+        if callable(generate_happ):
+            try:
+                happ_link = await generate_happ(result.username)
+            except Exception as exc:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "Happ link generation failed (provider=%s): %s",
+                    type(provider).__name__, str(exc),
+                )
         await deliver_config_to_user(
             bot, order["user_id"], "کانفیگ شخصی",
             [result.subscription_url], final_price=order["final_price"], order_id=order_id, db=db,
+            happ_links=[happ_link],
         )
     else:
         product = db.get_product(order["product_id"])
@@ -120,6 +132,7 @@ async def finalize_paid_order(db, bot, order_id: int, notify_admins_fn=None) -> 
                 return tr(f"⚠️ پرداخت تایید شد ولی ساخت خودکار کانفیگ ناموفق بود: {e}\nبا پشتیبانی تماس بگیرید.")
             db.approve_order_auto(order_id)
             links = [r["subscription_url"] for r in prov_results]
+            happ_links = [r.get("happ_link") for r in prov_results]
         else:
             results = db.take_unused_configs(order["product_id"], order["user_id"], quantity)
             if not results:
@@ -127,10 +140,12 @@ async def finalize_paid_order(db, bot, order_id: int, notify_admins_fn=None) -> 
                 return tr("⚠️ پرداخت تایید شد ولی موجودی هم‌زمان تمام شده؛ ادمین به‌زودی دستی رسیدگی می‌کند.")
             db.approve_order(order_id, [r["id"] for r in results])
             links = [r["link"] for r in results]
+            happ_links = []
             await check_and_notify_low_stock(bot.send_message, db, order["product_id"], bot_token=bot.token)
         await deliver_config_to_user(
             bot, order["user_id"], product["name"] if product else "",
             links, final_price=order["final_price"], order_id=order_id, db=db,
+            happ_links=happ_links,
         )
 
     reward_info = db.reward_referrer_if_first_purchase(order["user_id"], order["base_price"])

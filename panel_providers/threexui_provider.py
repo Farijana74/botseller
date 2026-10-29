@@ -67,6 +67,7 @@ import json
 import secrets
 import time
 import uuid
+from urllib.parse import quote, urlsplit
 #‍​‌‌​​​‌‌​‌‌​​‌​‌​‌‌​‌‌​​​‌‌​​‌​‌​‌‌​‌‌‌​​‌‌​‌‌‌‌​‌‌‌​​‌​‍
 import asyncio
 import aiohttp
@@ -197,6 +198,63 @@ class ThreeXUIProvider(BasePanelProvider):
 
         sub_url = f"{sub_base_url.rstrip('/')}/{sub_id}"
         return PanelUserResult(username=username, subscription_url=sub_url, raw=client)
+
+    async def generate_happ_link(self, username: str) -> str:
+        """از endpoint رسمی Sanaei برای همان client رکورد، لینک crypt5 می‌گیرد.
+
+        این تابع URL اشتراک را به سرویس ثالث نمی‌فرستد و خروجی/شناسه‌ها را لاگ نمی‌کند.
+        """
+        encoded_username = quote(str(username), safe="")
+        async with self._session() as session:
+            try:
+                async with session.get(
+                    f"{self._base_url()}/panel/api/clients/get/{encoded_username}",
+                    allow_redirects=False,
+                ) as resp:
+                    if resp.status >= 400:
+                        raise PanelError(f"Happ client lookup returned HTTP {resp.status}.")
+                    raw = await resp.content.read(65537)
+                    if len(raw) > 65536:
+                        raise PanelError("Happ client lookup response exceeded the size limit.")
+                    data = json.loads(raw.decode("utf-8"))
+                if not isinstance(data, dict) or not data.get("success"):
+                    raise PanelError("Happ client lookup was rejected by the panel.")
+                obj = data.get("obj") or {}
+                client = obj.get("client") if isinstance(obj, dict) else None
+                client_id = client.get("id") if isinstance(client, dict) else None
+                if not isinstance(client_id, int) or client_id < 1:
+                    raise PanelError("Happ client record ID was missing from the panel response.")
+                async with session.post(
+                    f"{self._base_url()}/panel/api/clients/happLink/{client_id}",
+                    allow_redirects=False,
+                ) as resp:
+                    if resp.status >= 400:
+                        raise PanelError(f"Happ crypt5 endpoint returned HTTP {resp.status}.")
+                    raw = await resp.content.read(16385)
+                    if len(raw) > 16384:
+                        raise PanelError("Happ crypt5 response exceeded the size limit.")
+                    result = json.loads(raw.decode("utf-8"))
+            except (aiohttp.ClientError, asyncio.TimeoutError, ValueError) as exc:
+                raise PanelError(f"Happ API request failed ({type(exc).__name__}).") from exc
+
+        link = ((result.get("obj") or {}).get("encryptedLink")
+                if isinstance(result, dict) and result.get("success") else None)
+        try:
+            parsed_link = urlsplit(link) if isinstance(link, str) else None
+            valid_link = bool(
+                parsed_link and parsed_link.scheme == "happ" and parsed_link.netloc == "crypt5"
+                and parsed_link.path not in ("", "/") and len(link.encode("utf-8")) <= 8192
+                and not any(ch.isspace() or ord(ch) < 32 for ch in link)
+                and not parsed_link.query and not parsed_link.fragment
+            )
+        except (ValueError, UnicodeError):
+            valid_link = False
+        if not valid_link:
+            message = result.get("msg") if isinstance(result, dict) else None
+            safe_codes = {"happ_source_too_long", "source_unavailable", "integration_disabled"}
+            reason = message if message in safe_codes else "panel returned no valid crypt5 link"
+            raise PanelError(f"Happ crypt5 generation failed: {reason}.")
+        return link
 
     async def delete_user(self, username: str) -> bool:
         """با API جدید دیگر نیازی به خواندن inbound و پیدا کردن client_id

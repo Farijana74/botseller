@@ -7,7 +7,7 @@
 (از طریق admin_panel.telegram_notify) کار می‌کند.
 """
 
-from config_delivery import build_qr_bytes, build_summary_text, get_post_delivery_text, prepare_delivery, strip_html
+from config_delivery import build_qr_bytes, build_summary_text, get_post_delivery_text, prepare_delivery, strip_html, delivery_mode_for_order
 from admin_panel.telegram_notify import send_message as tg_send, send_photo as tg_send_photo
 from config import BOT_TOKEN
 #‍​‌‌​​​‌‌​‌‌​​‌​‌​‌‌​‌‌​​​‌‌​​‌​‌​‌‌​‌‌‌​​‌‌​‌‌‌‌​‌‌‌​​‌​‍
@@ -74,6 +74,7 @@ async def deliver_config_to_user_web(
     order_id: int = None,
     db=None,
     bot_token: str = None,
+    happ_links=None,
 ) -> None:
     """نسخه‌ی پنل وب مستقل از تحویل کانفیگ؛ دقیقاً همان قالب پیام بات (عکس QR + کپشن HTML با
     «اطلاعات سرویس» و «لینک های اتصال») از طریق ماژول مشترک config_delivery.prepare_delivery.
@@ -87,25 +88,42 @@ async def deliver_config_to_user_web(
         return
     if isinstance(links, str):
         links = [links]
+    if isinstance(happ_links, str):
+        happ_links = [happ_links]
+    happ_links = list(happ_links or [])
+    delivery_mode = delivery_mode_for_order(db, order_id)
     total = len(links)
 
-    async def _send_html(text: str) -> None:
-        ok = await tg_send(bot_token, user_tg_id, text, parse_mode="HTML")
+    async def _send_html(text: str, reply_markup=None) -> None:
+        ok = await tg_send(bot_token, user_tg_id, text, parse_mode="HTML", reply_markup=reply_markup)
+        if not ok and reply_markup:
+            ok = await tg_send(bot_token, user_tg_id, text, parse_mode="HTML")
         if not ok:
             await tg_send(bot_token, user_tg_id, strip_html(text))
 
     for idx, link in enumerate(links, start=1):
-        caption, extras = await prepare_delivery(link, product_name, idx, total, db=db, user_tg_id=user_tg_id)
+        happ_link = happ_links[idx - 1] if idx <= len(happ_links) else None
+        effective_mode = delivery_mode if delivery_mode != "happ" or happ_link else "normal"
+        caption, extras = await prepare_delivery(
+            link, product_name, idx, total, db=db, user_tg_id=user_tg_id,
+            happ_link=(happ_link if effective_mode in {"happ", "both"} else None),
+            delivery_mode=effective_mode,
+        )
+        markup = ({"inline_keyboard": [[{"text": "📲 اتصال به Happ", "url": happ_link}]]}
+                  if happ_link and effective_mode in {"happ", "both"} else None)
 
         sent = False
         try:
-            qr_bytes = build_qr_bytes(link, db=db)
-            sent = await tg_send_photo(bot_token, user_tg_id, qr_bytes, "config_qr.png", caption, parse_mode="HTML")
+            qr_bytes = build_qr_bytes(happ_link if effective_mode == "happ" else link, db=db)
+            sent = await tg_send_photo(
+                bot_token, user_tg_id, qr_bytes, "config_qr.png", caption,
+                parse_mode="HTML", reply_markup=markup,
+            )
         except Exception:
             sent = False
         if not sent:
             # اگر ساخت/ارسال QR به هر دلیلی ناموفق بود، حداقل متن اطلاعات برای کاربر ارسال شود‍​‌‌​​​‌‌​‌‌​​‌​‌​‌‌​‌‌​​​‌‌​​‌​‌​‌‌​‌‌‌​​‌‌​‌‌‌‌​‌‌‌​​‌​‍
-            await _send_html(caption)
+            await _send_html(caption, reply_markup=markup)
 
         for extra in extras:
             await _send_html(extra)

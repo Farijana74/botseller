@@ -19,6 +19,7 @@ from i18n import tr
 
 import asyncio
 import html as html_lib
+import json
 import math
 import os
 import re
@@ -31,7 +32,7 @@ import qrcode
 
 import dedicated_sub
 from aiogram import Bot
-from aiogram.types import BufferedInputFile
+from aiogram.types import BufferedInputFile, InlineKeyboardButton, InlineKeyboardMarkup
 
 import config
 from jalali import to_jalali_str
@@ -351,7 +352,8 @@ async def collect_service_info(link: str, product_name: str = "") -> dict:
 
 
 def build_delivery_message(svc: dict, idx: int, total: int, sub_link_on: bool,
-                           individual_on: bool, alternates=None, L=None, header_text=None):
+                           individual_on: bool, alternates=None, L=None, header_text=None,
+                           happ_link=None):
     """خروجی: (caption_html, [extra_html_messages]). L تابع ترجمه‌ی برچسب‌های ثابت است."""
     L = L or (lambda t: t)
     alternates = alternates or []
@@ -376,6 +378,8 @@ def build_delivery_message(svc: dict, idx: int, total: int, sub_link_on: bool,
         if sub_link_on:
             link_lines.append(f"🌐 subscription : <code>{_h(svc['sub_url'])}</code>")
             link_lines += [f"🔁 subscription : <code>{_h(u)}</code>" for u in alternates]
+        if happ_link:
+            link_lines.append(f"🟣 Happ : <code>{_h(happ_link)}</code>")
     elif sub_link_on or individual_on:
         for c in svc["configs"]:
             link_lines.append(f"💝 config : <code>{_h(c)}</code>")
@@ -407,9 +411,12 @@ def build_delivery_message(svc: dict, idx: int, total: int, sub_link_on: bool,
 
 
 async def prepare_delivery(link: str, product_name: str, idx: int, total: int,
-                           db=None, user_tg_id: int = None, header_text=None):
+                           db=None, user_tg_id: int = None, header_text=None,
+                           happ_link=None, delivery_mode="both"):
     """مرحله‌ی مشترک بین بات (aiogram) و پنل وب: جمع‌آوری مشخصات و ساخت کپشن/پیام‌های اضافه."""
     sub_link_on, individual_on = _delivery_flags(db)
+    if delivery_mode == "happ" and happ_link:
+        sub_link_on, individual_on = False, False
     if db is not None and user_tg_id is not None:
         L = lambda t: localized(t, db, user_tg_id)
     else:
@@ -426,7 +433,31 @@ async def prepare_delivery(link: str, product_name: str, idx: int, total: int,
             alternates = await asyncio.to_thread(db.get_alternate_sub_urls, link)
         except Exception:
             alternates = []
-    return build_delivery_message(svc, idx, total, sub_link_on, individual_on, alternates, L, header_text)
+    return build_delivery_message(svc, idx, total, sub_link_on, individual_on, alternates, L, header_text, happ_link)
+
+
+def delivery_mode_for_order(db, order_id=None):
+    # SHOPVPN-HAPP-CATALOG-OVERLAY: strict-happ-delivery
+    """Resolve the purchase-time mode, falling back to product then category settings."""
+    if db is None or order_id is None:
+        return "normal"
+    try:
+        order = db.get_order(int(order_id))
+        if order and order["delivery_mode"] in {"normal", "happ", "both"}:
+            return "happ" if order["delivery_mode"] == "both" else order["delivery_mode"]
+        product_id = int(order["product_id"] or 0) if order else 0
+        if product_id <= 0:
+            return "normal"
+        mapping = json.loads(db.get_setting("telegram_sales_delivery_modes", "{}") or "{}")
+        mode = mapping.get(str(product_id), "inherit") if isinstance(mapping, dict) else "inherit"
+        if mode == "inherit":
+            product = db.get_product(product_id)
+            mode = mapping.get(f"cat:{product['category_id']}", "normal") if product and isinstance(mapping, dict) else "normal"
+        if mode == "both":
+            mode = "happ"
+        return mode if mode in {"normal", "happ"} else "normal"
+    except Exception:
+        return "normal"
 
 
 async def _send_html(bot: Bot, chat_id: int, text: str) -> None:
@@ -449,6 +480,7 @@ async def deliver_config_to_user(
     db=None,
     header_text=None,
     is_test: bool = False,
+    happ_links=None,
 ) -> None:
     """
     ارسال کانفیگ(های) خریداری‌شده به کاربر در قالب یک پیام: عکس QR + کپشن
@@ -468,18 +500,43 @@ async def deliver_config_to_user(
             return
     if isinstance(links, str):
         links = [links]
+    if isinstance(happ_links, str):
+        happ_links = [happ_links]
+    happ_links = list(happ_links or [])
+    delivery_mode = delivery_mode_for_order(db, order_id)
     total = len(links)
 
     for idx, link in enumerate(links, start=1):
-        caption, extras = await prepare_delivery(link, product_name, idx, total, db=db, user_tg_id=user_tg_id, header_text=header_text)
+        happ_link = happ_links[idx - 1] if idx <= len(happ_links) else None
+        if delivery_mode == "happ" and not happ_link:
+            # Never leak the ordinary subscription for an explicitly Happ-only purchase.
+            suffix = f" (سفارش #{order_id})" if order_id else ""
+            await bot.send_message(
+                user_tg_id,
+                "⚠️ سرویس ساخته و ثبت شد، اما پنل لینک Happ را تولید نکرد؛ برای حفظ روش انتخاب‌شده لینک معمولی ارسال نشد. لطفاً با پشتیبانی تماس بگیرید."
+                + suffix,
+            )
+            continue
+        effective_mode = delivery_mode
+        caption, extras = await prepare_delivery(link, product_name, idx, total, db=db, user_tg_id=user_tg_id,
+                                                header_text=header_text,
+                                                happ_link=(happ_link if effective_mode in {"happ", "both"} else None),
+                                                delivery_mode=effective_mode)
+        visible_happ_link = happ_link if effective_mode in {"happ", "both"} else None
+        markup = (InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="📲 اتصال به Happ", url=visible_happ_link)]])
+                  if visible_happ_link else None)
 
         try:
-            qr_link = await asyncio.to_thread(dedicated_sub.dedicated_link_for_upstream, db, link) if db is not None else link
+            qr_link = (happ_link if effective_mode == "happ" else
+                       await asyncio.to_thread(dedicated_sub.dedicated_link_for_upstream, db, link) if db is not None else link)
             qr_photo = _build_qr_photo(qr_link, db=db)
-            await bot.send_photo(user_tg_id, qr_photo, caption=caption, parse_mode="HTML")
+            await bot.send_photo(user_tg_id, qr_photo, caption=caption, parse_mode="HTML", reply_markup=markup)
         except Exception:
             # اگر ساخت/ارسال QR به هر دلیلی ناموفق بود، حداقل متن اطلاعات برای کاربر ارسال شود
-            await _send_html(bot, user_tg_id, caption)
+            try:
+                await bot.send_message(user_tg_id, caption, parse_mode="HTML", reply_markup=markup)
+            except Exception:
+                await _send_html(bot, user_tg_id, caption)
 
         for extra in extras:
             await _send_html(bot, user_tg_id, extra)

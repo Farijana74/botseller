@@ -142,6 +142,10 @@ class AdminAddCategory(StatesGroup):
     waiting_name = State()
 
 
+class AdminEditCategory(StatesGroup):
+    waiting_name = State()
+
+
 class AdminAddProduct(StatesGroup):
     waiting_category = State()
     waiting_name = State()

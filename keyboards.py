@@ -316,6 +316,51 @@ def inline_menu_for_user(db, user_tg_id: int, is_main_bot: bool = True) -> Inlin
                                 show_reseller_request, show_commission_reseller_request)
 
 
+def home_dashboard_kb(db, user_tg_id: int, is_main_bot: bool = True) -> InlineKeyboardMarkup:
+    """میانبرهای داشبورد شروع؛ callbackها به همان جریان‌های اصلی بات وصل‌اند."""
+    settings = db.get_all_settings()
+
+    def button(key: str, fallback: str, style: str = ""):
+        text = settings.get(key, fallback)
+        style = style if style in ("primary", "success", "danger") else None
+        return InlineKeyboardButton(text=tr(text), callback_data=f"mm:{key}", style=style)
+
+    rows = [
+        [button("btn_buy", "🛍 خرید سرویس", "success"),
+         button("btn_my_orders", "📡 سرویس‌های من", "primary")],
+        [button("btn_wallet", "💳 کیف پول"),
+         button("btn_test", "🧪 تست رایگان") ] if settings.get("test_enabled", "1") == "1" else
+        [button("btn_wallet", "💳 کیف پول")],
+    ]
+    extra = []
+    referral_enabled = (
+        settings.get("referral_button_enabled", "1") == "1"
+        and any(settings.get(k, default) == "1" for k, default in (
+            ("referral_enabled", "1"), ("referral_free_config_enabled", "0"),
+            ("referral_invite_bonus_enabled", "0"),
+        ))
+    )
+    if referral_enabled:
+        extra.append(button("btn_referral", "🎁 دعوت دوستان"))
+    if settings.get("wheel_enabled", "1") == "1":
+        extra.append(button("btn_wheel", "🎡 گردونه شانس"))
+    if settings.get("tutorial_menu_enabled", "1") == "1" and tutorial_hub.GENERAL in db.get_tutorial_bound_targets():
+        extra.append(button("btn_tutorial", "📘 راهنمای اتصال"))
+    for i in range(0, len(extra), 2):
+        rows.append(extra[i:i + 2])
+    engagement = []
+    if settings.get("lootbox_enabled", "0") == "1":
+        engagement.append(InlineKeyboardButton(text=tr("🎁 صندوق شانس"), callback_data="mm:btn_lootbox"))
+    if settings.get("season_enabled", "0") == "1":
+        engagement.append(InlineKeyboardButton(text=tr("🏆 رقابت فصل"), callback_data="mm:btn_season"))
+    if settings.get("streak_enabled", "0") == "1":
+        engagement.append(InlineKeyboardButton(text=tr("⚡️ پیشرفت من"), callback_data="mm:btn_progress"))
+    for i in range(0, len(engagement), 2):
+        rows.append(engagement[i:i + 2])
+    rows.append([button("btn_contact", "🎧 پشتیبانی")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 def tier_request_review_kb(request_id) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=tr("✅ تایید"), callback_data=f"tierreq_ok:{request_id}", style="success")],
@@ -2727,6 +2772,7 @@ def admin_categories_kb(categories) -> InlineKeyboardMarkup:
         rows.append(
             [
                 InlineKeyboardButton(text=f"{state_icon} {cat['name']}", callback_data="noop"),
+                InlineKeyboardButton(text=tr("✏️ ویرایش نام"), callback_data=f"adm_cat_edit:{cat['id']}"),
                 InlineKeyboardButton(text=tr("تغییر وضعیت"), callback_data=f"adm_cat_toggle:{cat['id']}"),
                 InlineKeyboardButton(text=tr("🗑حذف"), callback_data=f"adm_cat_del:{cat['id']}"),
             ]

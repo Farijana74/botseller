@@ -326,7 +326,7 @@ async def sub_endpoint(request: Request) -> Response:
         )
     extra_uris = await asyncio.to_thread(ds.ssh_uris_for_config, db, cc["id"], cc)
     reply = ds.compose_client_reply(up.status, up.headers, up.body, cc, settings, brand, page_url,
-                                    extra_uris=extra_uris)
+                                    extra_uris=extra_uris, user_agent=ua)
     if reply is None:
         status = 404 if up.status == 404 else 502
         await _log(cc["id"], request, "sub", status, settings)

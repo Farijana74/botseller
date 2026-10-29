@@ -48,6 +48,8 @@ DSUB_DEFAULTS: Dict[str, str] = {
     "dsub_show_faq": "1",               # بخش «اگر وصل نشد»
     "dsub_profile_title": "{name}",     # عنوان پروفایل داخل اپ؛ متغیرها: {name} {user} {brand}
     "dsub_update_interval": "12",       # ساعت؛ هدر profile-update-interval (۰ = از پنل)
+    "dsub_happ_routing_enabled": "1",   # ارسال routing فقط برای درخواست‌هایی که User-Agent آنها Happ است
+    "dsub_happ_routing": "happ://routing/onadd/eyJOYW1lIjoiSXJhbiBCeXBhc3MiLCJHbG9iYWxQcm94eSI6InRydWUiLCJSb3V0ZU9yZGVyIjoiYmxvY2stcHJveHktZGlyZWN0IiwiRGlyZWN0U2l0ZXMiOlsiZ2Vvc2l0ZTpwcml2YXRlIiwiZG9tYWluOmlyIiwiZ2Vvc2l0ZTpjYXRlZ29yeS1pciJdLCJEaXJlY3RJcCI6WyJnZW9pcDppciIsImdlb2lwOnByaXZhdGUiLCIxMjcuMC4wLjAvOCIsIjEwLjAuMC4wLzgiLCIxNzIuMTYuMC4wLzEyIiwiMTkyLjE2OC4wLjAvMTYiLCIxNjkuMjU0LjAuMC8xNiIsIjIyNC4wLjAuMC80IiwiMjU1LjI1NS4yNTUuMjU1Il0sIkJsb2NrU2l0ZXMiOltdLCJCbG9ja0lwIjpbXSwiUHJveHlTaXRlcyI6W10sIlByb3h5SXAiOltdLCJEb21haW5TdHJhdGVneSI6IklQSWZOb25NYXRjaCJ9",
     "dsub_info_line": "0",              # «خط اول ساب»: حجم و روز باقی‌مانده
     "dsub_info_line_text": "📊 {volume} | ⏳ {days}",
     "dsub_expired_placeholder": "1",    # کانفیگ نمایشی برای سرویس منقضی/تمام‌شده
@@ -195,6 +197,14 @@ def link_for_config(db, config_id: int) -> Optional[str]:
         return None
     token = db.ds_get_or_create_token(config_id)
     return link_for_token(db, token) if token else None
+
+
+def happ_add_link(subscription_url: str) -> str:
+    """Build Happ's local add-subscription deeplink for a regular HTTP(S) URL."""
+    url = str(subscription_url or "").strip()
+    if not url.startswith(("http://", "https://")):
+        return ""
+    return "happ://add/" + urllib.parse.quote(url, safe="")
 
 
 def dedicated_link_for_upstream(db, upstream_url: str) -> str:
@@ -609,6 +619,27 @@ def b64_header(text: str) -> str:
     return "base64:" + base64.b64encode(text.encode("utf-8")).decode("ascii")
 
 
+def valid_happ_routing_link(value: str) -> bool:
+    """Accept a Happ routing deeplink containing a base64 JSON profile."""
+    value = (value or "").strip()
+    if value == "happ://routing/off":
+        return True
+    prefix = "happ://routing/onadd/"
+    if value.startswith("happ://routing/add/"):
+        prefix = "happ://routing/add/"
+    if not value.startswith(prefix):
+        return False
+    encoded = value[len(prefix):].strip()
+    if not encoded or len(encoded) > 6000:
+        return False
+    try:
+        raw = base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4))
+        profile = json.loads(raw.decode("utf-8"))
+        return isinstance(profile, dict)
+    except (ValueError, UnicodeDecodeError, binascii.Error):
+        return False
+
+
 # ---------------------------------------------------------------------------
 # ساخت پاسخ برای اپ‌ها (کلاینت‌های VPN)
 # ---------------------------------------------------------------------------
@@ -625,7 +656,8 @@ _PASS_HEADERS = ("subscription-userinfo", "content-disposition", "routing", "pro
 
 def compose_client_reply(up_status: Optional[int], up_headers: Dict[str, str], up_body: bytes,
                          cc, settings: Dict[str, str], brand: str, page_url: str,
-                         now: Optional[int] = None, extra_uris: Optional[List[str]] = None) -> Optional[ClientReply]:
+                         now: Optional[int] = None, extra_uris: Optional[List[str]] = None,
+                         user_agent: str = "") -> Optional[ClientReply]:
     """پاسخ نهایی به اپ. None یعنی «پنل پاسخ معتبر نداد و جایگزینی هم مجاز نیست» (فراخوان خطا می‌دهد)."""
     now = now or int(time.time())
     up_headers = {k.lower(): v for k, v in (up_headers or {}).items()}
@@ -640,6 +672,12 @@ def compose_client_reply(up_status: Optional[int], up_headers: Dict[str, str], u
         for k in _PASS_HEADERS:
             if up_headers.get(k):
                 headers[k] = up_headers[k]
+
+    routing = (settings.get("dsub_happ_routing") or "").strip()
+    if settings.get("dsub_happ_routing_enabled", "1") == "1" and "happ" in (user_agent or "").lower():
+        if valid_happ_routing_link(routing):
+            headers["routing"] = routing
+            headers["routing-enable"] = "true"
 
     def finish(payload: bytes, ctype: str) -> ClientReply:
         headers["content-type"] = ctype

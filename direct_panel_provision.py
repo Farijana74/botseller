@@ -150,6 +150,7 @@ async def _provision_vpn(db, product, quantity: int = 1, user_id: int = None, or
             built.append({
                 "username": result.username,
                 "subscription_url": result.subscription_url,
+                "happ_link": await _happ_link_or_none(provider, result.username),
                 "volume_gb": volume_gb,
                 "duration_days": duration_days,
                 "user_limit": extra_kwargs.get("user_limit"),
@@ -180,6 +181,17 @@ async def _provision_vpn(db, product, quantity: int = 1, user_id: int = None, or
                 )
 
     return built
+
+
+async def _happ_link_or_none(provider, username: str):
+    generate = getattr(provider, "generate_happ_link", None)
+    if not callable(generate):
+        return None
+    try:
+        return await generate(username)
+    except Exception as exc:
+        logger.warning("Happ link generation failed (provider=%s): %s", type(provider).__name__, str(exc))
+        return None
 #‍​‌‌​​​‌‌​‌‌​​‌​‌​‌‌​‌‌​​​‌‌​​‌​‌​‌‌​‌‌‌​​‌‌​‌‌‌‌​‌‌‌​​‌​‍
 # 		   		 		  	 	 		 		   		  	 	 		 			  		 				 			  	 
 

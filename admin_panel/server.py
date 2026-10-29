@@ -2884,10 +2884,21 @@ async def api_approve_order(order_id: int, admin=Depends(require_permission("ord
             f"{order['custom_volume_gb']} گیگ | مبلغ: {order['final_price']:,} (پنل وب - {admin['username']})",
             "order", order_id,
         ))
+        happ_link = None
+        generate_happ = getattr(provider, "generate_happ_link", None)
+        if callable(generate_happ):
+            try:
+                happ_link = await generate_happ(result.username)
+            except Exception as exc:
+                logging.getLogger(__name__).warning(
+                    "Happ link generation failed (provider=%s): %s",
+                    type(provider).__name__, str(exc),
+                )
         await notify_user(order["user_id"], "✅ کانفیگ شخصی شما ساخته شد!")
         asyncio.create_task(deliver_config_to_user_web(
             order["user_id"], "کانفیگ شخصی", result.subscription_url,
             final_price=order["final_price"], order_id=order_id, db=db, bot_token=_bot_token(),
+            happ_links=[happ_link],
         ))
         return {"ok": True}
 
@@ -2914,6 +2925,7 @@ async def api_approve_order(order_id: int, admin=Depends(require_permission("ord
         asyncio.create_task(deliver_config_to_user_web(
             order["user_id"], product["name"], links,
             final_price=order["final_price"], order_id=order_id, db=db, bot_token=_bot_token(),
+            happ_links=[r.get("happ_link") for r in results],
         ))
         return {"ok": True}
 
@@ -3871,6 +3883,33 @@ def api_reorder_products(body: ProductReorderBody, admin=Depends(require_permiss
     return {"ok": True}
 
 
+def _telegram_sales_delivery_map():
+    # SHOPVPN-HAPP-CATALOG-OVERLAY: scoped-sales-settings
+    try:
+        value = json.loads(db.get_setting("telegram_sales_delivery_modes", "{}") or "{}")
+        return value if isinstance(value, dict) else {}
+    except (TypeError, ValueError):
+        return {}
+
+
+def _telegram_sales_happ_capable(server_id):
+    server = db.get_panel_server(server_id) if server_id else None
+    if not server or server["panel_type"] != "3xui":
+        return False
+    try:
+        return callable(getattr(get_provider(server), "generate_happ_link", None))
+    except Exception:
+        return False
+
+
+def _telegram_sales_happ_required(product_id, category_id):
+    modes = _telegram_sales_delivery_map()
+    mode = modes.get(str(product_id), "inherit") if product_id else "inherit"
+    if mode == "inherit":
+        mode = modes.get(f"cat:{category_id}", "normal")
+    return mode in {"happ", "both"}
+
+
 @app.post("/api/products")
 def api_add_product(body: ProductBody, admin=Depends(require_permission("catalog"))):
     if body.duration_days < 0:
@@ -3886,6 +3925,9 @@ def api_add_product(body: ProductBody, admin=Depends(require_permission("catalog
         if not ssh_node or ssh_node.get("node_type") != "linux":
             raise HTTPException(400, "فقط نود Linux Agent فعال برای محصول SSH پشتیبانی می‌شود.")
     direct_target = bool(body.provision_server_id or body.provision_ssh_node_id)
+    if (_telegram_sales_happ_required(None, body.category_id)
+            and not _telegram_sales_happ_capable(body.provision_server_id)):
+        raise HTTPException(400, "این دسته روی Happ تنظیم شده؛ محصول جدید باید به پنل 3X-UI سازگار متصل باشد.")
     if body.duration_days == 0 and not direct_target:
         raise HTTPException(400, tr("مدت نامحدود فقط برای محصولات با اتصال مستقیم ممکن است."))
     if direct_target:
@@ -4020,6 +4062,10 @@ def api_edit_product(product_id: int, body: ProductEditBody, admin=Depends(requi
     effective_ssh_node_id = (
         provision_ssh_node_id if provision_ssh_node_id is not ... else old_product["provision_ssh_node_id"]
     )
+    effective_category_id = body.category_id if body.category_id is not None else old_product["category_id"]
+    if (_telegram_sales_happ_required(product_id, effective_category_id)
+            and not _telegram_sales_happ_capable(effective_server_id)):
+        raise HTTPException(400, "روش Happ برای این محصول فعال است؛ مقصد آن باید پنل 3X-UI سازگار باشد یا ابتدا روش تحویل را عوض کنید.")
 
     if body.duration_days is not None:
         if body.duration_days < 0:
@@ -6227,6 +6273,109 @@ async def api_exchange_rate_refresh(admin=Depends(require_permission("panels")))
 @app.get("/api/settings")
 def api_settings(admin=Depends(require_permission("settings"))):
     return db.get_all_settings()
+
+
+class TelegramSalesSettingsBody(BaseModel):
+    default_delivery: str = "normal"
+    product_delivery: Dict[str, str] = {}
+
+
+@app.get("/api/telegram-sales/overview")
+def api_telegram_sales_overview(admin=Depends(require_permission("settings"))):
+    """Safe operational summary; never returns bot tokens, subscription links, or user IDs."""
+    with db._get_conn() as conn:
+        users = int(conn.execute("SELECT COUNT(*) FROM users").fetchone()[0])
+        buyers = int(conn.execute("SELECT COUNT(DISTINCT user_id) FROM orders WHERE status='approved'").fetchone()[0])
+        sales = int(conn.execute("SELECT COUNT(*) FROM orders WHERE status='approved' AND COALESCE(is_renewal,0)=0").fetchone()[0])
+        renewals = int(conn.execute("SELECT COUNT(*) FROM orders WHERE status='approved' AND COALESCE(is_renewal,0)=1").fetchone()[0])
+        recent = conn.execute(
+            "SELECT o.id, o.status, o.created_at, COALESCE(p.name,'') AS product "
+            "FROM orders o LEFT JOIN products p ON p.id=o.product_id ORDER BY o.id DESC LIMIT 8"
+        ).fetchall()
+    try:
+        mode_map = json.loads(db.get_setting("telegram_sales_delivery_modes", "{}") or "{}")
+    except Exception:
+        mode_map = {}
+    if not isinstance(mode_map, dict):
+        mode_map = {}
+    def happ_supported(product):
+        server_id = product.get("provision_server_id")
+        server = db.get_panel_server(server_id) if server_id else None
+        return bool(server and server["panel_type"] == "3xui")
+
+    products = []
+    for p in db.get_all_products():
+        row = dict(p)
+        configured_mode = mode_map.get(str(row["id"]), "inherit")
+        if configured_mode == "both":
+            configured_mode = "happ"
+        products.append({"id": int(row["id"]), "name": row["name"], "is_active": bool(row["is_active"]),
+                         "category_id": int(row["category_id"]), "category_name": row.get("category_name", ""),
+                         "happ_supported": happ_supported(row),
+                         "delivery_mode": configured_mode})
+    with db._get_conn() as conn:
+        categories = [dict(r) for r in conn.execute("SELECT id,name,is_active FROM categories ORDER BY sort_order,id").fetchall()]
+    for category in categories:
+        category["delivery_mode"] = mode_map.get(f"cat:{category['id']}", "inherit")
+        if category["delivery_mode"] == "both":
+            category["delivery_mode"] = "happ"
+    return {
+        "users": users, "buyers": buyers, "sales": sales, "renewals": renewals,
+        "telegram_configured": bool(_bot_token()), "telegram_token_masked": "••••••••" if _bot_token() else "",
+        "panel_count": len(db.get_panel_servers()), "service_status": "وضعیت فرایند از این پنل قابل مشاهده نیست",
+        "recent_orders": [dict(r) for r in recent], "products": products, "categories": categories,
+        "default_delivery": "normal",
+        "product_delivery": mode_map if isinstance(mode_map, dict) else {},
+    }
+
+
+@app.post("/api/telegram-sales/settings")
+def api_telegram_sales_settings(body: TelegramSalesSettingsBody, admin=Depends(require_permission("settings"))):
+    valid = {"inherit", "normal", "happ"}
+    if body.default_delivery != "normal":
+        raise HTTPException(400, "روش پیش‌فرض باید معمولی باشد؛ Happ فقط برای محصولات یا دسته‌های انتخاب‌شده فعال می‌شود.")
+    product_rows = [dict(p) for p in db.get_all_products()]
+    products = {str(int(p["id"])): p for p in product_rows}
+    with db._get_conn() as conn:
+        categories = {str(int(r["id"])): r["name"] for r in conn.execute("SELECT id,name FROM categories").fetchall()}
+
+    mapping = {}
+    for key, value in body.product_delivery.items():
+        raw_key = str(key)
+        is_category = raw_key.startswith("cat:") and raw_key[4:].isdigit()
+        normalized = str(int(raw_key[4:])) if is_category else (str(int(raw_key)) if raw_key.isdigit() else "")
+        if value not in valid or (is_category and normalized not in categories) or (not is_category and normalized not in products):
+            raise HTTPException(400, "تنظیم یکی از پلن‌ها نامعتبر است.")
+        if value == "happ":
+            affected = ([p for p in product_rows if str(p.get("category_id")) == normalized
+                         and str(body.product_delivery.get(str(p["id"]), "inherit")) != "normal"]
+                        if is_category else [products[normalized]])
+            if any(not _telegram_sales_happ_capable(p.get("provision_server_id")) for p in affected):
+                scope = f"دسته‌بندی «{categories[normalized]}»" if is_category else f"محصول «{products[normalized]['name']}»"
+                raise HTTPException(400, f"{scope} شامل محصولی است که از API رسمی Happ پنل 3X-UI پشتیبانی نمی‌کند؛ تنظیم Happ ذخیره نشد.")
+        mapping[f"cat:{normalized}" if is_category else normalized] = value
+    db.set_setting("telegram_sales_default_delivery", "normal")
+    db.set_setting("telegram_sales_delivery_modes", json.dumps(mapping, ensure_ascii=False, separators=(",", ":")))
+    db.log_admin_action(admin["id"], "telegram_sales_settings", "تنظیم روش تحویل ربات فروش تغییر کرد.", "setting")
+    return {"ok": True}
+
+
+@app.post("/api/telegram-sales/test-telegram")
+async def api_telegram_sales_test_telegram(admin=Depends(require_permission("settings"))):
+    result = await tg_get_me(_bot_token())
+    return {"ok": bool(result), "username": (result or {}).get("username") if result else None}
+
+
+@app.post("/api/telegram-sales/test-panels")
+async def api_telegram_sales_test_panels(admin=Depends(require_permission("settings"))):
+    results = []
+    for server in db.get_panel_servers(active_only=True):
+        try:
+            ok = bool(await get_provider(server).test_connection())
+        except Exception:
+            ok = False
+        results.append({"name": server["name"], "ok": ok})
+    return {"ok": bool(results) and all(x["ok"] for x in results), "results": results}
 
 
 @app.get("/api/settings/sub-page-preview")

@@ -152,6 +152,7 @@ async def provision_auto_config(
             built.append({
                 "username": result.username,
                 "subscription_url": result.subscription_url,
+                "happ_link": await _happ_link_or_none(provider, result.username),
                 "volume_gb": volume_gb,
                 "duration_days": duration_days,
                 "user_limit": extra_kwargs.get("user_limit"),
@@ -227,6 +228,17 @@ async def provision_auto_config(
                     )
 
     return built
+
+
+async def _happ_link_or_none(provider, username: str):
+    generate = getattr(provider, "generate_happ_link", None)
+    if not callable(generate):
+        return None
+    try:
+        return await generate(username)
+    except Exception as exc:
+        logger.warning("Happ link generation failed (provider=%s): %s", type(provider).__name__, str(exc))
+        return None
 
 
 def is_volume_credit_bot(local_db: Database, is_main_bot: bool) -> bool:

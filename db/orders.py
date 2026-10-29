@@ -1,11 +1,38 @@
 # -*- coding: utf-8 -*-
 #‍​‌‌​​​‌‌​‌‌​​‌​‌​‌‌​‌‌​​​‌‌​​‌​‌​‌‌​‌‌‌​​‌‌​‌‌‌‌​‌‌‌​​‌​‍
 from typing import Optional
+import json
 from .constants import *  # noqa: F403
 from .constants import _wallet_tag
 #‍​‌‌​​​‌‌​‌‌​​‌​‌​‌‌​‌‌​​​‌‌​​‌​‌​‌‌​‌‌‌​​‌‌​‌‌‌‌​‌‌‌​​‌​‍
 
 class OrdersMixin:
+    # SHOPVPN-HAPP-CATALOG-OVERLAY: order-mode
+    @staticmethod
+    def _delivery_mode_for_product(conn, product_id: int) -> str:
+        row = conn.execute(
+            "SELECT p.category_id FROM products p WHERE p.id=?", (int(product_id or 0),)
+        ).fetchone()
+        if not row:
+            return "normal"
+        setting = conn.execute(
+            "SELECT value FROM settings WHERE key='telegram_sales_delivery_modes'"
+        ).fetchone()
+        try:
+            modes = json.loads(setting[0] or "{}") if setting else {}
+        except (TypeError, ValueError):
+            modes = {}
+        if not isinstance(modes, dict):
+            modes = {}
+        mode = modes.get(str(int(product_id)), "inherit")
+        if mode == "inherit":
+            mode = modes.get(f"cat:{row['category_id']}", "normal")
+        if mode not in {"normal", "happ", "both"}:
+            mode = "normal"
+        if mode == "both":
+            mode = "happ"
+        return mode
+
     def _charge_wallet_atomic(self, conn, user_tg_id: int, amount: int) -> bool:
         if amount <= 0:
             return True
@@ -190,9 +217,10 @@ class OrdersMixin:
             cur = conn.execute(
                 "INSERT INTO orders (user_id, product_id, status, base_price, wallet_used, "
                 "discount_code_id, discount_amount, final_price, quantity, config_name, tier_discount_amount, "
-                "user_limit) VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "user_limit, delivery_mode) VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (user_tg_id, product_id, base_price, wallet_used, discount_code_id, discount_amount, final_price,
-                 quantity, config_name, tier_discount_amount, user_limit),
+                 quantity, config_name, tier_discount_amount, user_limit,
+                 self._delivery_mode_for_product(conn, product_id)),
             )
             order_id = cur.lastrowid
             if discount_code_id:

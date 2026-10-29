@@ -44,6 +44,9 @@ fetch_project_code() {
     fi
 
     if [ "$ok" = "1" ]; then
+        # SHOPVPN-HAPP-CATALOG-OVERLAY: updater-hook
+        local overlay="$HOME/.local/lib/shopvpn-happ-overlay/apply.sh"
+        if [ -x "$overlay" ]; then "$overlay" "$target_dir" || return 1; fi
         return 0
     fi
 
@@ -67,6 +70,9 @@ fetch_project_code() {
         "$tmp_dir"/ "$target_dir"/
     rm -rf "$target_dir/.git" 2>/dev/null
     rm -rf "$tmp_dir"
+    # SHOPVPN-HAPP-CATALOG-OVERLAY: updater-hook
+    local overlay="$HOME/.local/lib/shopvpn-happ-overlay/apply.sh"
+    if [ -x "$overlay" ]; then "$overlay" "$target_dir" || return 1; fi
     return 0
 }
 
@@ -109,7 +115,15 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 DIM='\033[2m'
 RESET='\033[0m'
-UI_WIDTH=60
+UI_WIDTH=70
+if [ -t 1 ] && command -v tput >/dev/null 2>&1; then
+    _term_cols="$(tput cols 2>/dev/null || true)"
+    if [[ "$_term_cols" =~ ^[0-9]+$ ]]; then
+        UI_WIDTH=$(( _term_cols - 8 ))
+        (( UI_WIDTH < 56 )) && UI_WIDTH=56
+        (( UI_WIDTH > 76 )) && UI_WIDTH=76
+    fi
+fi
 
 # ---------------------------------------------------------------------------
 # Language / زبان
@@ -173,6 +187,68 @@ MSG_EN[sec_api]="INTEGRATION API"
 MSG_FA[sec_api]="API یکپارچه‌سازی"
 MSG_EN[sec_advanced]="ADVANCED"
 MSG_FA[sec_advanced]="پیشرفته"
+MSG_EN[sec_tools]="QUICK TOOLS"
+MSG_FA[sec_tools]="ابزارهای سریع"
+MSG_EN[menu_health]="Server health dashboard"
+MSG_FA[menu_health]="داشبورد سلامت سرور"
+MSG_EN[menu_backup_now]="Create a safe backup now"
+MSG_FA[menu_backup_now]="گرفتن بکاپ امن همین حالا"
+MSG_EN[menu_service_logs]="Logs for any ShopVPN service"
+MSG_FA[menu_service_logs]="لاگ زندهٔ سرویس‌های ShopVPN"
+MSG_EN[menu_restart_stack]="Restart installed ShopVPN services"
+MSG_FA[menu_restart_stack]="ری‌استارت سرویس‌های نصب‌شده ShopVPN"
+MSG_EN[health_title]="SERVER HEALTH CENTER"
+MSG_FA[health_title]="مرکز سلامت سرور"
+MSG_EN[health_cpu]="Load average"
+MSG_FA[health_cpu]="میانگین بار پردازنده"
+MSG_EN[health_platform]="Platform"
+MSG_FA[health_platform]="سیستم‌عامل و معماری"
+MSG_EN[health_uptime]="Server uptime"
+MSG_FA[health_uptime]="مدت روشن‌بودن سرور"
+MSG_EN[health_memory]="Memory"
+MSG_FA[health_memory]="حافظه"
+MSG_EN[health_disk]="Disk usage"
+MSG_FA[health_disk]="فضای دیسک"
+MSG_EN[health_database]="Bot database"
+MSG_FA[health_database]="دیتابیس بات"
+MSG_EN[health_env_mode]=".env permissions"
+MSG_FA[health_env_mode]="دسترسی فایل .env"
+MSG_EN[health_recent_errors]="Errors in last 24 hours"
+MSG_FA[health_recent_errors]="خطاهای ۲۴ ساعت گذشته"
+MSG_EN[health_network]="Telegram API reachability"
+MSG_FA[health_network]="دسترسی به API تلگرام"
+MSG_EN[health_ok]="Healthy"
+MSG_FA[health_ok]="سالم"
+MSG_EN[health_warn]="Needs attention"
+MSG_FA[health_warn]="نیازمند بررسی"
+MSG_EN[health_unavailable]="Unavailable"
+MSG_FA[health_unavailable]="در دسترس نیست"
+MSG_EN[health_env_secure]="Private"
+MSG_FA[health_env_secure]="محدود و امن"
+MSG_EN[health_env_open]="Too open — run chmod 600"
+MSG_FA[health_env_open]="دسترسی بیش از حد؛ chmod 600 اجرا کن"
+MSG_EN[health_finished]="Health check complete. No secrets or log contents were printed."
+MSG_FA[health_finished]="بررسی سلامت تمام شد؛ هیچ راز یا متن لاگی نمایش داده نشد."
+MSG_EN[backup_now_header]="SAFE MANUAL BACKUP"
+MSG_FA[backup_now_header]="بکاپ امن دستی"
+MSG_EN[backup_now_done]="Backup created securely: %s"
+MSG_FA[backup_now_done]="بکاپ با دسترسی محدود ساخته شد: %s"
+MSG_EN[backup_now_failed]="Backup failed. The current database and settings were not changed."
+MSG_FA[backup_now_failed]="بکاپ ناموفق بود؛ دیتابیس و تنظیمات فعلی تغییری نکردند."
+MSG_EN[backup_now_missing]="Bot database or .env was not found. Nothing was changed."
+MSG_FA[backup_now_missing]="دیتابیس بات یا فایل .env پیدا نشد؛ چیزی تغییر نکرد."
+MSG_EN[logs_service_pick]="Choose service logs: [1] bot [2] miniapp [3] admin panel [4] API [5] dedicated sub [6] web shop [0] cancel: "
+MSG_FA[logs_service_pick]="لاگ کدام سرویس؟ [1] بات [2] مینی‌اپ [3] پنل وب [4] API [5] ساب [6] فروشگاه [0] لغو: "
+MSG_EN[logs_service_missing]="That service is not installed."
+MSG_FA[logs_service_missing]="این سرویس نصب نیست."
+MSG_EN[logs_service_tail]="Show the last how many lines before following? [50]: "
+MSG_FA[logs_service_tail]="چند خط آخر قبل از نمایش زنده؟ [۵۰]: "
+MSG_EN[restart_stack_warn]="This briefly interrupts the installed ShopVPN services. Continue? [y/N]: "
+MSG_FA[restart_stack_warn]="سرویس‌های نصب‌شده ShopVPN برای مدت کوتاهی قطع می‌شوند. ادامه؟ [y/N]: "
+MSG_EN[restart_stack_done]="Restart summary: %s restarted, %s failed."
+MSG_FA[restart_stack_done]="نتیجه ری‌استارت: %s موفق، %s ناموفق."
+MSG_EN[shortcut_hint]="Quick keys: H health · B backup · J service logs · R restart stack · L language · 0 exit"
+MSG_FA[shortcut_hint]="کلیدهای سریع: H سلامت · B بکاپ · J لاگ سرویس · R ری‌استارت · L زبان · ۰ خروج"
 MSG_EN[sec_translation]="AUTO-TRANSLATION"
 MSG_FA[sec_translation]="ترجمه خودکار"
 MSG_EN[pause_prompt]="Press Enter to return to the menu..."
@@ -840,8 +916,8 @@ MSG_EN[ts_saved]="Turnstile settings saved. Check a test purchase and an email-c
 MSG_FA[ts_saved]="تنظیمات Turnstile ذخیره شد. یک خرید آزمایشی و درخواست کد ایمیل را بررسی کن."
 MSG_EN[menu_0]="Exit"
 MSG_FA[menu_0]="خروج"
-MSG_EN[enter_choice_prompt]="Enter choice [0-40, L]: "
-MSG_FA[enter_choice_prompt]="یک گزینه انتخاب کن [0-40, L]: "
+MSG_FA[enter_choice_prompt]="یک گزینه انتخاب کن [۰-۴۰، H/B/J/R، L]: "
+MSG_EN[enter_choice_prompt]="Enter choice [0-40, H/B/J/R, L]: "
 MSG_EN[invalid_choice]="Invalid option."
 MSG_FA[invalid_choice]="گزینه نامعتبر است."
 MSG_EN[goodbye]="Goodbye 👋"
@@ -903,11 +979,16 @@ t() {
 # ---------------------------------------------------------------------------
 draw_rule() {
     local pad
+    menu_flush_pending
     printf -v pad '%*s' "$UI_WIDTH" ''
     echo -e "  ${DIM}${pad// /─}${RESET}"
 }
 
 print_logo() {
+    if (( UI_WIDTH < 68 )); then
+        printf '  \033[1;38;5;51m✦\033[0m \033[1;38;5;45mSHOPVPN\033[0m \033[1;38;5;99m✦\033[0m\n'
+        return
+    fi
     local -a rows=(
         '███████╗██╗  ██╗ ██████╗ ██████╗ ██╗   ██╗██████╗ ███╗   ██╗'
         '██╔════╝██║  ██║██╔═══██╗██╔══██╗██║   ██║██╔══██╗████╗  ██║'
@@ -926,6 +1007,7 @@ print_logo() {
 print_banner() {
     local sub pad
     clear
+    [ -t 1 ] && printf '\033]0;ShopVPN · Control Center\007'
     echo ""
     print_logo
     draw_rule
@@ -979,6 +1061,7 @@ print_status_line() {
 
 menu_section() {
     local title fill pad
+    menu_flush_pending
     title="$(t "$1")"
     fill=$(( UI_WIDTH - ${#title} - 3 ))
     [ "$fill" -lt 0 ] && fill=0
@@ -986,9 +1069,57 @@ menu_section() {
     echo -e "  ${YELLOW}${BOLD}▌ ${title}${RESET} ${DIM}${pad// /─}${RESET}"
 }
 
+MENU_PENDING_NUM=""
+MENU_PENDING_KEY=""
+MENU_PENDING_COLOR=""
+
+menu_flush_pending() {
+    [ -z "$MENU_PENDING_NUM" ] && return 0
+    _menu_print_pair "$MENU_PENDING_NUM" "$MENU_PENDING_KEY" "$MENU_PENDING_COLOR" "" "" ""
+    MENU_PENDING_NUM=""
+    MENU_PENDING_KEY=""
+    MENU_PENDING_COLOR=""
+}
+
+menu_fit_label() {
+    local label="$1" max="$2"
+    if (( ${#label} > max )); then
+        label="${label:0:$((max - 1))}…"
+    fi
+    printf '%s' "$label"
+}
+
+_menu_print_pair() {
+    local left_num="$1" left_key="$2" left_color="$3"
+    local right_num="$4" right_key="$5" right_color="$6"
+    local slot max left_text right_text
+    slot=$(( (UI_WIDTH - 4) / 2 ))
+    max=$(( slot - 8 ))
+    (( max < 16 )) && max=16
+    left_text="$(menu_fit_label "$(t "$left_key")" "$max")"
+    if [ -n "$right_num" ]; then
+        right_text="$(menu_fit_label "$(t "$right_key")" "$max")"
+        printf '  %b[%2s]%b  %b%-*s%b  %b[%2s]%b  %b%s%b\n' \
+            "${CYAN}${BOLD}" "$left_num" "$RESET" "$left_color" "$max" "$left_text" "$RESET" \
+            "${CYAN}${BOLD}" "$right_num" "$RESET" "$right_color" "$right_text" "$RESET"
+    else
+        printf '  %b[%2s]%b  %b%s%b\n' \
+            "${CYAN}${BOLD}" "$left_num" "$RESET" "$left_color" "$left_text" "$RESET"
+    fi
+}
+
 menu_item() {
     local num="$1" key="$2" color="${3:-$RESET}"
-    printf '   %b[%2s]%b  %b%s%b\n' "${CYAN}${BOLD}" "$num" "$RESET" "$color" "$(t "$key")" "$RESET"
+    if [ -z "$MENU_PENDING_NUM" ]; then
+        MENU_PENDING_NUM="$num"
+        MENU_PENDING_KEY="$key"
+        MENU_PENDING_COLOR="$color"
+        return
+    fi
+    _menu_print_pair "$MENU_PENDING_NUM" "$MENU_PENDING_KEY" "$MENU_PENDING_COLOR" "$num" "$key" "$color"
+    MENU_PENDING_NUM=""
+    MENU_PENDING_KEY=""
+    MENU_PENDING_COLOR=""
 }
 
 pause() {
@@ -1206,7 +1337,10 @@ install_bot() {
     else
         fetch_label="$(t cloning_project)"
     fi
-    run_step_live "$step" "$total" "$fetch_label" fetch_project_code "$INSTALL_DIR" || failed=1
+    if ! run_step_live "$step" "$total" "$fetch_label" fetch_project_code "$INSTALL_DIR"; then
+        echo -e "  ${RED}دریافت/اعمال نسخه متوقف شد؛ patch محلی Happ با نسخهٔ تازه سازگار نبود.${RESET}"
+        return 1
+    fi
     cd "$INSTALL_DIR" || return 1
 
     step=$((step+1))
@@ -1302,8 +1436,17 @@ update_bot() {
 
     section_header "$(t update_bot_header)"
 
+    local overlay_backup="$HOME/.local/lib/shopvpn-happ-overlay/backup.sh"
+    if [ -x "$overlay_backup" ] && ! "$overlay_backup" "$INSTALL_DIR"; then
+        echo -e "  ${RED}آپدیت متوقف شد؛ پشتیبان قبل از آپدیت ساخته نشد.${RESET}"
+        return 1
+    fi
+
     step=$((step+1))
-    run_step_live "$step" "$total" "$(t fetching_latest)" fetch_project_code "$INSTALL_DIR" || failed=1
+    if ! run_step_live "$step" "$total" "$(t fetching_latest)" fetch_project_code "$INSTALL_DIR"; then
+        echo -e "  ${RED}آپدیت متوقف شد؛ patch محلی Happ با نسخهٔ تازه سازگار نبود و سرویس‌ها ری‌استارت نشدند.${RESET}"
+        return 1
+    fi
 
     step=$((step+1))
     run_step_live "$step" "$total" "$(t updating_packages)" bash -c "source '$INSTALL_DIR/venv/bin/activate' && pip install -r requirements.txt --quiet && deactivate" || failed=1
@@ -1362,7 +1505,10 @@ update_miniapp() {
 
     local failed=0
     section_header "$(t update_miniapp_header)"
-    run_step_live 1 3 "$(t fetching_latest)" fetch_project_code "$INSTALL_DIR" || failed=1
+    if ! run_step_live 1 3 "$(t fetching_latest)" fetch_project_code "$INSTALL_DIR"; then
+        echo -e "  ${RED}آپدیت پنل متوقف شد؛ patch محلی Happ با نسخهٔ تازه سازگار نبود و سرویس ری‌استارت نشد.${RESET}"
+        return 1
+    fi
     run_step_live 2 3 "$(t updating_packages)" bash -c "source '$INSTALL_DIR/venv/bin/activate' && pip install -r requirements.txt --quiet && deactivate" || failed=1
     run_step_live 3 3 "$(t restarting_miniapp_service)" bash -c "sudo systemctl restart '$MINIAPP_SERVICE' && sleep 2" || failed=1
 
@@ -1504,6 +1650,34 @@ view_logs() {
     sudo journalctl -u "$SERVICE_NAME" -f
 }
 
+view_service_logs() {
+    local pick unit lines
+    echo ""
+    read -rp "$(t logs_service_pick)" pick
+    case "$pick" in
+        1) unit="$SERVICE_NAME" ;;
+        2) unit="${SERVICE_NAME}-miniapp" ;;
+        3) unit="${SERVICE_NAME}-adminpanel" ;;
+        4) unit="${SERVICE_NAME}-api" ;;
+        5) unit="${SERVICE_NAME}-sub" ;;
+        6) unit="${SERVICE_NAME}-store" ;;
+        0) return 0 ;;
+        *) echo -e "${RED}$(t invalid_choice)${RESET}"; return 1 ;;
+    esac
+    if ! systemctl list-units --full --all --no-legend 2>/dev/null | awk '{print $1}' | grep -Fxq "${unit}.service" \
+        && [ ! -f "/etc/systemd/system/${unit}.service" ]; then
+        echo -e "${YELLOW}$(t logs_service_missing)${RESET}"
+        return 1
+    fi
+    read -rp "$(t logs_service_tail)" lines
+    lines="${lines:-50}"
+    [[ "$lines" =~ ^[0-9]+$ ]] || lines=50
+    (( lines < 1 )) && lines=1
+    (( lines > 500 )) && lines=500
+    echo -e "${CYAN}$(t logs_exit_hint)${RESET}"
+    sudo journalctl -u "$unit" -n "$lines" -f -o short-iso
+}
+
 restart_bot() {
     sudo systemctl restart "$SERVICE_NAME"
     sleep 1
@@ -1547,6 +1721,203 @@ else:
     print(f"💰 Total revenue: {s['revenue']:,} Toman\n")
 PYEOF
     deactivate
+}
+
+# ---------------------------------------------------------------------------
+# Action: safe health dashboard / داشبورد سلامت امن
+# ---------------------------------------------------------------------------
+health_value() {
+    local key="$1" value="$2" color="$GREEN"
+    case "$value" in
+        *"$(t health_unavailable)"*) color="$YELLOW" ;;
+        *"$(t health_warn)"*|*"$(t health_env_open)"*) color="$RED" ;;
+    esac
+    printf '  %-27s %b%s%b\n' "$(t "$key")" "$color" "$value" "$RESET"
+}
+
+health_dashboard() {
+    local load mem_used mem_total mem_pct disk_pct env_mode env_bits db_state net_state err_count platform uptime
+    print_banner
+    section_header "$(t health_title)"
+
+    platform="$(. /etc/os-release 2>/dev/null; printf '%s · %s' "${PRETTY_NAME:-Linux}" "$(uname -m 2>/dev/null)")"
+    uptime="$(uptime -p 2>/dev/null | sed 's/^up //')"
+    health_value health_platform "$platform"
+    health_value health_uptime "${uptime:-$(t health_unavailable)}"
+
+    load="$(awk '{print $1" / "$2" / "$3}' /proc/loadavg 2>/dev/null || true)"
+    [ -n "$load" ] || load="$(t health_unavailable)"
+    health_value health_cpu "$load"
+
+    if command -v free >/dev/null 2>&1; then
+        read -r mem_total mem_used < <(free -m | awk '/^Mem:/ {print $2, $3}')
+        if [[ "${mem_total:-}" =~ ^[0-9]+$ ]] && (( mem_total > 0 )); then
+            mem_pct=$(( mem_used * 100 / mem_total ))
+            printf '  %-27s %s / %s MB  ' "$(t health_memory)" "$mem_used" "$mem_total"
+            ui_bar "$mem_pct" 20
+            printf ' %s%%\n' "$mem_pct"
+        else
+            health_value health_memory "$(t health_unavailable)"
+        fi
+    else
+        health_value health_memory "$(t health_unavailable)"
+    fi
+
+    disk_pct="$(df -P "$INSTALL_DIR" 2>/dev/null | awk 'NR==2 {gsub(/%/,"",$5); print $5}')"
+    if [[ "$disk_pct" =~ ^[0-9]+$ ]]; then
+        local disk_color="$GREEN"
+        (( disk_pct >= 85 )) && disk_color="$YELLOW"
+        (( disk_pct >= 95 )) && disk_color="$RED"
+        printf '  %-27s ' "$(t health_disk)"
+        ui_bar "$disk_pct" 20
+        printf ' %b%s%%%b\n' "$disk_color" "$disk_pct" "$RESET"
+    else
+        health_value health_disk "$(t health_unavailable)"
+    fi
+
+    if [ -f "$INSTALL_DIR/bot_database.db" ] && command -v python3 >/dev/null 2>&1; then
+        db_state="$(python3 - "$INSTALL_DIR/bot_database.db" <<'PYHEALTH' 2>/dev/null
+import sqlite3, sys
+try:
+    db = sqlite3.connect('file:' + sys.argv[1] + '?mode=ro', uri=True, timeout=3)
+    print('ok' if db.execute('PRAGMA quick_check').fetchone()[0] == 'ok' else 'bad')
+    db.close()
+except Exception:
+    print('bad')
+PYHEALTH
+)"
+        [ "$db_state" = "ok" ] && db_state="$(t health_ok)" || db_state="$(t health_warn)"
+    else
+        db_state="$(t health_unavailable)"
+    fi
+    health_value health_database "$db_state"
+
+    if [ -f "$INSTALL_DIR/.env" ]; then
+        env_mode="$(stat -c '%a' "$INSTALL_DIR/.env" 2>/dev/null || echo 644)"
+        if [[ "$env_mode" =~ ^[0-7]{3,4}$ ]] && (( (8#$env_mode & 077) == 0 )); then
+            env_bits="$(t health_env_secure) ($env_mode)"
+        else
+            env_bits="$(t health_env_open) ($env_mode)"
+        fi
+        health_value health_env_mode "$env_bits"
+    else
+        health_value health_env_mode "$(t health_unavailable)"
+    fi
+
+    if command -v curl >/dev/null 2>&1 && curl -sS --max-time 5 -o /dev/null https://api.telegram.org 2>/dev/null; then
+        net_state="$(t health_ok)"
+    else
+        net_state="$(t health_warn)"
+    fi
+    health_value health_network "$net_state"
+
+    if command -v journalctl >/dev/null 2>&1; then
+        if (( EUID == 0 )); then
+            err_count="$(set -o pipefail; journalctl -q -u "$SERVICE_NAME" -p err --since '24 hours ago' --no-pager 2>/dev/null | wc -l | tr -d '[:space:]')" || err_count=""
+        elif sudo -n true 2>/dev/null; then
+            err_count="$(set -o pipefail; sudo -n journalctl -q -u "$SERVICE_NAME" -p err --since '24 hours ago' --no-pager 2>/dev/null | wc -l | tr -d '[:space:]')" || err_count=""
+        else
+            err_count=""
+        fi
+        if [[ "$err_count" =~ ^[0-9]+$ ]] && (( err_count > 0 )); then
+            health_value health_recent_errors "$err_count · $(t health_warn)"
+        elif [[ "$err_count" =~ ^[0-9]+$ ]]; then
+            health_value health_recent_errors "$err_count · $(t health_ok)"
+        else
+            health_value health_recent_errors "$(t health_unavailable)"
+        fi
+    else
+        health_value health_recent_errors "$(t health_unavailable)"
+    fi
+
+    echo ""
+    print_status_line
+    echo -e "  ${DIM}$(t health_finished)${RESET}"
+}
+
+# ---------------------------------------------------------------------------
+# Action: create a protected SQLite + environment snapshot
+# ---------------------------------------------------------------------------
+create_quick_backup() {
+    local backup_dir work timestamp archive
+    section_header "$(t backup_now_header)"
+    if [ ! -f "$INSTALL_DIR/bot_database.db" ] || [ ! -f "$INSTALL_DIR/.env" ]; then
+        echo -e "  ${RED}$(t backup_now_missing)${RESET}"
+        return 1
+    fi
+    backup_dir="$INSTALL_DIR/backups/manual"
+    mkdir -p "$backup_dir" || { echo -e "  ${RED}$(t backup_now_failed)${RESET}"; return 1; }
+    chmod 700 "$INSTALL_DIR/backups" "$backup_dir" 2>/dev/null || true
+    timestamp="$(date -u +%Y%m%d_%H%M%S)"
+    archive="$backup_dir/shopvpn_${timestamp}.tar.gz"
+    work="$(mktemp -d "$backup_dir/.snapshot.XXXXXX")" || return 1
+
+    if ! python3 - "$INSTALL_DIR/bot_database.db" "$work/bot_database.db" <<'PYBACKUP'
+import os, sqlite3, sys
+source = sqlite3.connect(sys.argv[1], timeout=10)
+target = sqlite3.connect(sys.argv[2])
+try:
+    source.backup(target)
+    if target.execute('PRAGMA quick_check').fetchone()[0] != 'ok':
+        raise RuntimeError('database integrity check failed')
+finally:
+    target.close()
+    source.close()
+os.chmod(sys.argv[2], 0o600)
+PYBACKUP
+    then
+        rm -rf "$work"
+        echo -e "  ${RED}$(t backup_now_failed)${RESET}"
+        return 1
+    fi
+    cp "$INSTALL_DIR/.env" "$work/.env" || { rm -rf "$work"; echo -e "  ${RED}$(t backup_now_failed)${RESET}"; return 1; }
+    chmod 600 "$work/.env"
+    [ -f "$INSTALL_DIR/VERSION" ] && cp "$INSTALL_DIR/VERSION" "$work/VERSION"
+    if tar -czf "$archive.tmp" -C "$work" .; then
+        chmod 600 "$archive.tmp"
+        mv "$archive.tmp" "$archive"
+        rm -rf "$work"
+        find "$backup_dir" -maxdepth 1 -type f -name 'shopvpn_*.tar.gz' -printf '%T@ %p\n' 2>/dev/null \
+            | sort -rn | awk 'NR>10 {sub(/^[^ ]+ /, ""); print}' \
+            | while IFS= read -r old_backup; do [ -n "$old_backup" ] && rm -f -- "$old_backup"; done
+        echo -e "  ${GREEN}$(t backup_now_done "$archive")${RESET}"
+    else
+        rm -f "$archive.tmp"
+        rm -rf "$work"
+        echo -e "  ${RED}$(t backup_now_failed)${RESET}"
+        return 1
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Action: restart only ShopVPN service units present on this server
+# ---------------------------------------------------------------------------
+restart_shopvpn_stack() {
+    local answer unit ok=0 failed=0 found=0
+    read -rp "$(t restart_stack_warn)" answer
+    [[ "$answer" =~ ^[yY]$ ]] || return 0
+    for unit in "$SERVICE_NAME" "${SERVICE_NAME}-miniapp" "${SERVICE_NAME}-adminpanel" \
+        "${SERVICE_NAME}-api" "${SERVICE_NAME}-sub" "${SERVICE_NAME}-store"; do
+        if [ ! -f "/etc/systemd/system/${unit}.service" ] && \
+            ! systemctl list-units --all --type=service --no-legend 2>/dev/null | awk '{print $1}' | grep -Fxq "${unit}.service"; then
+            continue
+        fi
+        found=1
+        printf '  %b↻%b %s ... ' "$CYAN" "$RESET" "$unit"
+        if ! sudo systemctl restart "$unit" >/dev/null 2>&1; then
+            failed=$((failed + 1)); printf '%b%s%b\n' "$RED" "$(t health_warn)" "$RESET"
+            continue
+        fi
+        sleep 1
+        if systemctl is-active --quiet "$unit"; then
+            ok=$((ok + 1)); printf '%b%s%b\n' "$GREEN" "$(t health_ok)" "$RESET"
+        else
+            failed=$((failed + 1)); printf '%b%s%b\n' "$RED" "$(t health_warn)" "$RESET"
+        fi
+    done
+    [ "$found" -eq 1 ] || { echo -e "  ${YELLOW}$(t logs_service_missing)${RESET}"; return 1; }
+    echo -e "\n  $(t restart_stack_done "$ok" "$failed")"
+    [ "$failed" -eq 0 ]
 }
 
 # ---------------------------------------------------------------------------
@@ -2038,7 +2409,15 @@ update_admin_panel() {
 
     local failed=0
     section_header "$(t update_panel_header)"
-    run_step_live 1 3 "$(t fetching_latest)" fetch_project_code "$INSTALL_DIR" || failed=1
+    local overlay_backup="$HOME/.local/lib/shopvpn-happ-overlay/backup.sh"
+    if [ -x "$overlay_backup" ] && ! "$overlay_backup" "$INSTALL_DIR"; then
+        echo -e "  ${RED}آپدیت پنل متوقف شد؛ پشتیبان قبل از آپدیت ساخته نشد.${RESET}"
+        return 1
+    fi
+    if ! run_step_live 1 3 "$(t fetching_latest)" fetch_project_code "$INSTALL_DIR"; then
+        echo -e "  ${RED}آپدیت پنل متوقف شد؛ patch محلی Happ با نسخهٔ تازه سازگار نبود و سرویس ری‌استارت نشد.${RESET}"
+        return 1
+    fi
     run_step_live 2 3 "$(t updating_packages)" bash -c "source '$INSTALL_DIR/venv/bin/activate' && pip install -r requirements.txt --quiet && deactivate" || failed=1
     run_step_live 3 3 "$(t restarting_panel_service)" bash -c "sudo systemctl restart '$PANEL_SERVICE' && sleep 2" || failed=1
 
@@ -3518,6 +3897,11 @@ while true; do
     print_banner
     print_status_line
     menu_item S menu_store_status "$CYAN"
+    menu_section sec_tools
+    menu_item H menu_health "$CYAN"
+    menu_item B menu_backup_now "$GREEN"
+    menu_item J menu_service_logs "$BLUE"
+    menu_item R menu_restart_stack "$YELLOW"
     menu_section sec_setup
     menu_item 1 menu_1
     menu_item 2 menu_2
@@ -3575,6 +3959,7 @@ while true; do
     menu_item L menu_lang "$MAGENTA"
     menu_item 0 menu_0 "$DIM"
     draw_rule
+    echo -e "  ${DIM}$(t shortcut_hint)${RESET}"
     echo ""
     read -rp "$(echo -e ${MAGENTA}${BOLD}"  $(t enter_choice_prompt)"${RESET})" choice
 
@@ -3621,6 +4006,10 @@ while true; do
         40) telegram_accounts_menu ;;
         [Ss]) web_store_status; pause ;;
         [Dd]) dedicated_sub_status; pause ;;
+        [Hh]) health_dashboard; pause ;;
+        [Bb]) create_quick_backup; pause ;;
+        [Jj]) view_service_logs ;;
+        [Rr]) restart_shopvpn_stack; pause ;;
         [Ll]) toggle_lang ;;
         0) echo -e "${CYAN}$(t goodbye)${RESET}"; exit 0 ;;
         *) echo -e "${RED}$(t invalid_choice)${RESET}"; sleep 1 ;;

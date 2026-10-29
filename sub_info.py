@@ -320,14 +320,14 @@ async def fetch_individual_links(sub_url: str) -> list:
         async with _session() as session:
             async with session.get(sub_url, headers={"User-Agent": "v2rayNG/1.8.29"}) as resp:
                 if resp.status != 200:
-                    _log.warning("fetch_individual_links: HTTP %s برای %s", resp.status, sub_url)
+                    _log.warning("fetch_individual_links: subscription request returned HTTP %s", resp.status)
                     return []
                 raw = await resp.text()
-    except Exception:
-        _log.exception("fetch_individual_links: درخواست به %s ناموفق بود", sub_url)
+    except Exception as exc:
+        _log.warning("fetch_individual_links: request failed (%s)", type(exc).__name__)
         return []
 
-    _log.info("fetch_individual_links: %d بایت خام دریافت شد از %s؛ نمونه: %r", len(raw), sub_url, raw[:200])
+    _log.info("fetch_individual_links: received %d bytes", len(raw))
 
     # حالت ۱: خودِ متن خام، یک کانفیگ کامل Xray-core/sing-box به فرمت JSON است‍​‌‌​​​‌‌​‌‌​​‌​‌​‌‌​‌‌​​​‌‌​​‌​‌​‌‌​‌‌‌​​‌‌​‌‌‌‌​‌‌‌​​‌​‍
     # (نه لیست لینک) - این حالت اصلاً base64 نیست، پس باید قبل از تلاش برای
@@ -355,10 +355,7 @@ async def fetch_individual_links(sub_url: str) -> list:
     # هر جای متن (حتی وسط HTML) استخراج می‌کنیم.
     out = [html_lib.unescape(m.group(0)) for m in _CONFIG_URI_RE.finditer(decoded)]
     if not out:
-        _log.warning(
-            "fetch_individual_links: هیچ کانفیگی از %s استخراج نشد؛ نمونه‌ی دیکدشده: %r",
-            sub_url, decoded[:200],
-        )
+        _log.warning("fetch_individual_links: no configuration links were extracted")
     return out
 
 

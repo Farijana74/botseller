@@ -45,7 +45,8 @@ from service_refund import (
 )
 from config import MAX_TEST_PER_USER, RESELLER_DBS_DIR, resolve_db_path, DB_PATH, ADMIN_PANEL_URL
 from database import Database, DuplicateBotTokenError
-from config_delivery import deliver_config_to_user, send_individual_configs, build_qr_bytes
+# SHOPVPN-HAPP-CATALOG-OVERLAY: order-page-and-qr
+from config_delivery import deliver_config_to_user, send_individual_configs, build_qr_bytes, delivery_mode_for_order
 import dedicated_sub
 from renewal_engine import execute_renewal, RenewalError
 import renewal_log
@@ -350,12 +351,41 @@ def create_user_router(db, is_main_bot: bool = True, bot_manager=None) -> Router
             await message.answer(text, **kwargs)
 
     async def _send_inline_main_menu(target, user_tg_id: int):
-        """اگر منوی شیشه‌ای بالا از تنظیمات فعال باشد، آن را به‌عنوان یک پیام
-        جدا (کنار/بعد از منوی پایین) ارسال می‌کند. target هر شیء‌ای است که
-        متد answer async دارد (Message یا call.message)."""
-        inline_kb = (await asyncio.to_thread(kb.inline_menu_for_user, db, user_tg_id, is_main_bot))
-        if inline_kb is not None:
-            await target.answer(db.get_text('handlers_user.auto_f368dac9', '📋 منو:'), reply_markup=inline_kb)
+        """کارت داشبورد شروع را با میانبرهای متصل به جریان‌های واقعی بات می‌فرستد."""
+        first_name = ""
+        orders = []
+        balance = 0
+        active_services = 0
+        try:
+            user = await asyncio.to_thread(db.get_user, user_tg_id)
+            first_name = escape_html((dict(user).get("first_name") if user else "") or "دوست عزیز")
+            wallet = await asyncio.to_thread(db.get_wallet_status, user_tg_id)
+            balance = int(wallet.get("balance", 0) or 0)
+            orders = [dict(row) for row in await asyncio.to_thread(db.get_user_orders, user_tg_id)]
+            configs = [dict(row) for row in await asyncio.to_thread(db.get_custom_configs_for_user, user_tg_id)]
+            active_services = sum(
+                1 for row in configs
+                if row.get("status") == "active" and row.get("source") != "test"
+                and row.get("enabled", 1)
+            )
+            bank_configs = [dict(row) for row in await asyncio.to_thread(db.get_bank_configs_for_user, user_tg_id)]
+            active_services += sum(1 for row in bank_configs if not row.get("is_disabled", 0))
+        except Exception:
+            logging.getLogger("handlers_user").exception("ساخت داشبورد شروع ناموفق بود.")
+            first_name = first_name or "دوست عزیز"
+
+        approved_orders = sum(1 for row in orders if row.get("status") == "approved")
+        text = (
+            f"✨ <b>{tr('داشبورد شما، {name}').format(name=first_name)}</b>\n"
+            "━━━━━━━━━━━━━━━━━━\n"
+            f"{tr('به فروشگاه خوش آمدید؛ از میانبرهای زیر سریع به بخش موردنظرتان بروید.')}\n\n"
+            f"{tr('📡 سرویس‌های فعال')}: <b>{active_services}</b>\n"
+            f"{tr('🧾 خریدهای تکمیل‌شده')}: <b>{approved_orders}</b>\n"
+            f"{tr('💳 اعتبار کیف پول')}: <b>{balance:,} {tr('تومان')}</b>\n"
+            "━━━━━━━━━━━━━━━━━━"
+        )
+        markup = await asyncio.to_thread(kb.home_dashboard_kb, db, user_tg_id, is_main_bot)
+        await target.answer(text, parse_mode="HTML", reply_markup=markup)
 
     async def _schedule_card_msg_autodelete(chat_id: int, message_id: int):
         """اگر ادمین از تنظیمات، حذف خودکار پیام‌های شماره کارت را فعال کرده باشد،
@@ -1062,18 +1092,13 @@ def create_user_router(db, is_main_bot: bool = True, bot_manager=None) -> Router
         welcome = (await asyncio.to_thread(db.get_setting, "welcome_text"))
         reply_enabled = (await asyncio.to_thread(db.get_setting, "main_menu_reply_enabled", "1")) == "1"
         if reply_enabled:
-            # منوی پایین فعال است: طبق روال قبلی، پیام خوش‌آمد با منوی پایین
-            # ارسال می‌شود و منوی شیشه‌ای (در صورت فعال بودن) در پیام جدا می‌آید،
-            # چون یک پیام نمی‌تواند هم‌زمان هر دو نوع کیبورد را داشته باشد.
+            # منوی پایین و کارت داشبورد هر دو در دسترس می‌مانند.
             await message.answer(welcome, reply_markup=kb.menu_for_user(db, message.from_user.id, is_main_bot))
             await _send_inline_main_menu(message, message.from_user.id)
         else:
-            # منوی پایین غیرفعال است: اگر منوی شیشه‌ای فعال باشد، دکمه‌ها مستقیم
-            # زیر همین پیام خوش‌آمد می‌آیند و پیام جدای «📋 منو:» حذف می‌شود.
-            inline_kb = (await asyncio.to_thread(kb.inline_menu_for_user, db, message.from_user.id, is_main_bot))
             await message.answer(
                 welcome,
-                reply_markup=inline_kb if inline_kb is not None else kb.menu_for_user(db, message.from_user.id, is_main_bot),
+                reply_markup=await asyncio.to_thread(kb.home_dashboard_kb, db, message.from_user.id, is_main_bot),
             )
 
         for action in post_start_actions:
@@ -2216,6 +2241,7 @@ def create_user_router(db, is_main_bot: bool = True, bot_manager=None) -> Router
                         return
                     (await asyncio.to_thread(db.approve_order_auto, order_id))
                     links = [r["subscription_url"] for r in prov_results]
+                    happ_links = [r.get("happ_link") for r in prov_results]
                 else:
                     results = (await asyncio.to_thread(db.take_unused_configs, product_id, call.from_user.id, quantity))
                     if not results:
@@ -2230,6 +2256,7 @@ def create_user_router(db, is_main_bot: bool = True, bot_manager=None) -> Router
                         return
                     (await asyncio.to_thread(db.approve_order, order_id, [r["id"] for r in results]))
                     links = [r["link"] for r in results]
+                    happ_links = []
                     await check_and_notify_low_stock(bot.send_message, db, product_id, bot_token=bot.token)
                 reward_info = (await asyncio.to_thread(db.reward_referrer_if_first_purchase, call.from_user.id, order["base_price"]))
                 if reward_info:
@@ -2258,6 +2285,7 @@ def create_user_router(db, is_main_bot: bool = True, bot_manager=None) -> Router
                     final_price=0,
                     order_id=order_id,
                     db=db,
+                    happ_links=happ_links,
                 )
                 await call.answer()
                 return
@@ -2945,6 +2973,16 @@ def create_user_router(db, is_main_bot: bool = True, bot_manager=None) -> Router
                     message.from_user.id, server["id"], result.username, volume_gb,
                     duration_days, result.subscription_url, order_id=order_id, product_id=product_id,
                 ))
+                happ_link = None
+                generate_happ = getattr(provider, "generate_happ_link", None)
+                if callable(generate_happ):
+                    try:
+                        happ_link = await generate_happ(result.username)
+                    except Exception as exc:
+                        logging.getLogger(__name__).warning(
+                            "Happ link generation failed (provider=%s): %s",
+                            type(provider).__name__, str(exc),
+                        )
                 await message.answer(
                     db.get_text('handlers_user.auto_5f36061a', '✅ مبلغ سفارش شما به\u200cطور کامل از کیف پول پوشش داده شد.\nکانفیگ شما در پیام بعدی ارسال می\u200cشود 👇'),
                     reply_markup=kb.menu_for_user(db, message.from_user.id, is_main_bot),
@@ -2953,6 +2991,7 @@ def create_user_router(db, is_main_bot: bool = True, bot_manager=None) -> Router
                 await deliver_config_to_user(
                     message.bot, message.from_user.id, "کانفیگ شخصی",
                     [result.subscription_url], final_price=0, order_id=order_id, db=db,
+                    happ_links=[happ_link],
                 )
                 try:
                     await _notify_admins_of_order(message.bot, order_id)
@@ -4089,6 +4128,8 @@ def create_user_router(db, is_main_bot: bool = True, bot_manager=None) -> Router
         if kind == "custom":
             cc = item["custom"]
             sub_url = cc["subscription_url"]
+            delivery_mode = await asyncio.to_thread(delivery_mode_for_order, db, cc["order_id"])
+            happ_link = None
             server = (await asyncio.to_thread(db.get_panel_server, cc["panel_server_id"])) if cc["panel_server_id"] else None
             if server and server["is_active"]:
                 try:
@@ -4100,7 +4141,14 @@ def create_user_router(db, is_main_bot: bool = True, bot_manager=None) -> Router
                                 db.update_custom_config_subscription_url, cc["id"], fresh.subscription_url,
                             ))
                         sub_url = fresh.subscription_url
+                    if delivery_mode == "happ":
+                        generate_happ = getattr(provider, "generate_happ_link", None)
+                        if not callable(generate_happ):
+                            raise PanelError("این پنل تولید لینک Happ را پشتیبانی نمی‌کند.")
+                        happ_link = await generate_happ(cc["username"])
                 except Exception:
+                    if delivery_mode == "happ":
+                        raise
                     # پنل در دسترس نبود، تایم‌اوت داد یا کاربر پیدا نشد؛ به‌جای کرش‌کردن
                     # کل صفحه (که باعث می‌شود چیزی برای کاربر نمایش داده نشود)،
                     # همان لینک ذخیره‌شده (احتمالاً قدیمی) نشان داده می‌شود.
@@ -4121,9 +4169,25 @@ def create_user_router(db, is_main_bot: bool = True, bot_manager=None) -> Router
                 text += "⏳ انقضا: شروع از اولین اتصال\n"
             elif cc["expires_at"]:
                 text += f"📅 انقضا: {to_jalali_str(cc['expires_at'], with_time=True)}\n"
-            if sub_url:
+            if delivery_mode == "happ":
+                if not happ_link:
+                    raise PanelError("لینک Happ سرویس در دسترس نیست؛ لینک معمولی نمایش داده نشد.")
+                text += f"🔗 لینک اتصال Happ: `{escape_md(happ_link)}`\n"
+                info = await fetch_sub_info(sub_url) if sub_url else None
+                if info:
+                    text += f"\n{format_sub_info_fa(info)}"
+            elif sub_url:
                 shown_url = await asyncio.to_thread(dedicated_sub.dedicated_link_for_upstream, db, sub_url)
                 text += f"🔗 `{shown_url}`\n"
+                if delivery_mode == "both" and server and server["is_active"]:
+                    try:
+                        provider = get_provider(server)
+                        generate_happ = getattr(provider, "generate_happ_link", None)
+                        if callable(generate_happ):
+                            happ_link = await generate_happ(cc["username"])
+                            text += f"🟣 لینک Happ: `{escape_md(happ_link)}`\n"
+                    except Exception:
+                        logging.getLogger("handlers_user").warning("Happ link refresh failed for a service order.")
                 info = await fetch_sub_info(sub_url)
                 text += f"\n{format_sub_info_fa(info)}"
                 if str(sub_url).startswith(("http://", "https://")):
@@ -4479,15 +4543,37 @@ def create_user_router(db, is_main_bot: bool = True, bot_manager=None) -> Router
             await call.answer(db.get_text('handlers_user.auto_6bf10f8b', 'این مورد یافت نشد.'), show_alert=True)
             return
         link = None
+        link_is_happ = False
         if item["kind"] == "config":
+            if delivery_mode_for_order(db, item["order"]["id"]) == "happ":
+                await call.answer("این سفارش لینک Happ قابل تولید ندارد؛ لینک عادی برای سفارش Happ نمایش داده نمی‌شود.", show_alert=True)
+                return
             link = item["config"]["link"]
         elif item["kind"] == "custom":
-            link = item["custom"]["subscription_url"]
+            cc = item["custom"]
+            mode = await asyncio.to_thread(delivery_mode_for_order, db, cc["order_id"])
+            if mode == "happ":
+                server = (await asyncio.to_thread(db.get_panel_server, cc["panel_server_id"])) if cc["panel_server_id"] else None
+                try:
+                    if not server or not server["is_active"]:
+                        raise PanelError("پنل سرویس در دسترس نیست.")
+                    provider = get_provider(server)
+                    generate_happ = getattr(provider, "generate_happ_link", None)
+                    if not callable(generate_happ):
+                        raise PanelError("این پنل Happ را پشتیبانی نمی‌کند.")
+                    link = await generate_happ(cc["username"])
+                    link_is_happ = True
+                except Exception:
+                    await call.answer("ساخت QR لینک Happ ناموفق بود؛ لینک معمولی نمایش داده نمی‌شود.", show_alert=True)
+                    return
+            else:
+                link = cc["subscription_url"]
         if not link:
             await call.answer(db.get_text('handlers_user.auto_4e32a60a', 'لینکی برای ساخت کیوآر پیدا نشد.'), show_alert=True)
             return
         await call.answer()
-        link = await asyncio.to_thread(dedicated_sub.dedicated_link_for_upstream, db, link)
+        if not link_is_happ:
+            link = await asyncio.to_thread(dedicated_sub.dedicated_link_for_upstream, db, link)
         photo = BufferedInputFile(build_qr_bytes(link, db=db), filename="config_qr.png")
         await bot.send_photo(call.from_user.id, photo, caption=tr("⬜ کیوآر کانفیگ شما"))
 
@@ -8124,6 +8210,7 @@ def create_user_router(db, is_main_bot: bool = True, bot_manager=None) -> Router
                     return
                 await asyncio.to_thread(db.approve_order_auto, order_id)
                 links = [r["subscription_url"] for r in prov_results]
+                happ_links = [r.get("happ_link") for r in prov_results]
             else:
                 results = await asyncio.to_thread(db.take_unused_configs, product_id, user_id, quantity)
                 if not results:
@@ -8135,6 +8222,7 @@ def create_user_router(db, is_main_bot: bool = True, bot_manager=None) -> Router
                     return
                 await asyncio.to_thread(db.approve_order, order_id, [r["id"] for r in results])
                 links = [r["link"] for r in results]
+                happ_links = []
                 await check_and_notify_low_stock(bot.send_message, db, product_id, bot_token=bot.token)
 
             reward_info = await asyncio.to_thread(db.reward_referrer_if_first_purchase, user_id, order["base_price"])
@@ -8153,7 +8241,8 @@ def create_user_router(db, is_main_bot: bool = True, bot_manager=None) -> Router
             await message.answer(
                 db.get_text('handlers_user.auto_56b713c7', '✅ خرید شما به\u200cطور کامل از کیف پول پرداخت شد.\nکانفیگ شما در پیام بعدی ارسال می\u200cشود 👇')
             )
-            await deliver_config_to_user(bot, user_id, product["name"], links, final_price=0, order_id=order_id, db=db)
+            await deliver_config_to_user(bot, user_id, product["name"], links, final_price=0,
+                                         order_id=order_id, db=db, happ_links=happ_links)
         except Exception:
             logging.getLogger("handlers_user").exception(
                 "خطای غیرمنتظره در خرید خودکارِ دستیار هوشمند برای سفارش #%s کاربر %s؛ سفارش رد و کیف پول بازگردانده شد.",
@@ -8731,6 +8820,12 @@ def create_user_router(db, is_main_bot: bool = True, bot_manager=None) -> Router
             await referral_menu(fake_message, bot)
         elif key == "btn_wheel":
             await wheel_of_fortune(fake_message, bot)
+        elif key == "btn_season":
+            await show_season_for_message(db, fake_message)
+        elif key == "btn_lootbox":
+            await show_lootbox_for_message(db, fake_message)
+        elif key == "btn_progress":
+            await show_progress_for_message(db, fake_message)
         elif key == "btn_contact":
             await contact_start(fake_message, state)
         elif key == "btn_reseller_panel":
